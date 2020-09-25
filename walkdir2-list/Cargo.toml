@@ -1,0 +1,23 @@
+[package]
+publish = false
+name = "walkdir2-bin"
+version = "0.0.0"
+authors = ["Andrew Gallant <jamslam@gmail.com>"]
+description = "A simple command line tool for playing with walkdir2 on the CLI."
+documentation = "https://docs.rs/walkdir2"
+homepage = "https://github.com/nvksv/walkdir2"
+repository = "https://github.com/nvksv/walkdir2"
+keywords = ["walk", "directory", "recursive", "find"]
+license = "Unlicense OR MIT"
+categories = ["command-line-utilities"]
+edition = "2018"
+
+[[bin]]
+name = "walkdir2-list"
+path = "main.rs"
+
+[dependencies]
+atty = "0.2.11"
+bstr = { version = "0.1.2", default-features = false, features = ["std"] }
+clap = { version = "2.33.0", default-features = false }
+walkdir2 = { version = "*", path = ".." }

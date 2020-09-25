@@ -1,0 +1,9 @@
+edition = "2018"
+newline_style = "Unix"
+max_width = 100
+use_small_heuristics = "max"
+fn_params_layout = "Vertical"
+match_block_trailing_comma = true
+struct_lit_width = 0
+struct_variant_width = 0
+use_field_init_shorthand = true
