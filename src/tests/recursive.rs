@@ -17,7 +17,7 @@ fn check_defaulted_generic_parameter() {
 
 #[test]
 fn send_sync_traits() {
-    use crate::WalkDirIterator;
+//    use crate::WalkDirIterator;
 
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}
