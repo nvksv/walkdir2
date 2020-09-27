@@ -1,4 +1,3 @@
-use std::cmp;
 use std::vec;
 
 use crate::cp::ContentProcessor;
@@ -8,7 +7,7 @@ use crate::walk::rawdent::{RawDirEntry};
 use crate::error::{ErrorInner, Error};
 use crate::walk::opts::{WalkDirOptions, WalkDirOptionsImmut};
 use crate::wd::{
-    self, ContentFilter, Depth, FnCmp, IntoOk, IntoSome, Position,
+    self, ContentFilter, Depth, FnCmp, IntoOk, IntoSome, Position, InnerPositionWithData,
 };
 
 // /// Like try, but for iterators that return [`Option<Result<_, _>>`].
@@ -50,8 +49,8 @@ macro_rules! process_dent {
 
 /// Type of item for Iterators
 pub type WalkDirIteratorItem<E, CP> = Position<
-    (<CP as ContentProcessor<E>>::Item, <CP as ContentProcessor<E>>::Collection),
     <CP as ContentProcessor<E>>::Item,
+    <CP as ContentProcessor<E>>::Collection,
     Error<E>,
 >;
 
@@ -122,7 +121,7 @@ where
     ///
     /// This is only `Some(...)` at the beginning. After the first iteration,
     /// this is always `None`.
-    start: Option<E::PathBuf>,
+    root: Option<E::PathBuf>,
     /// A stack of open (up to max fd) or closed handles to directories.
     /// An open handle is a plain [`fs::ReadDir`] while a closed handle is
     /// a `Vec<fs::DirEntry>` corresponding to the as-of-yet consumed entries.
@@ -138,11 +137,8 @@ where
     ///
     /// [`follow_links`]: struct.WalkDir.html#method.follow_links
     ancestors: Vec<Ancestor<E>>,
-    /// An index into `states` that points to the oldest open directory
-    /// handle. If the maximum fd limit is reached and a new directory needs to
-    /// be read, the handle at this index is closed before the new directory is
-    /// opened.
-    oldest_opened: Depth,
+    /// Count of opened dirs.
+    opened_count: Depth,
     /// The current depth of iteration (the length of the stack at the
     /// beginning of each iteration).
     depth: Depth,
@@ -166,11 +162,11 @@ where
     pub fn new(opts: WalkDirOptions<E, CP>, root: E::PathBuf) -> Self {
         Self {
             opts,
-            start: Some(root),
+            root: Some(root),
             states: vec![],
             transition_state: TransitionState::None,
             ancestors: vec![],
-            oldest_opened: 0,
+            opened_count: 0,
             depth: 0,
             root_device: None,
         }
@@ -260,22 +256,38 @@ where
             &mut self.opts.ctx,
         )?;
 
-        self.states.push(state);
+        self.push_dir_2( (state, None) );
 
         Ok(())
     }
 
-    fn load_oldest_opened(&mut self) {
-        // Make room for another open file descriptor if we've hit the max.
-        let free = self.states.len().checked_sub(self.oldest_opened).unwrap();
-        if free == self.opts.immut.max_open {
-            let state = self.states.get_mut(self.oldest_opened).unwrap();
-            state.load_all(
-                &self.opts.immut,
-                &mut process_dent!(self, state.depth()),
-                &mut self.opts.ctx,
-            );
+    fn check_max_open(&mut self) {
+        // Exit when open handles count are not limited.
+        let max_open = if let Some(max_open) = self.opts.immut.max_open {max_open} else {return};
+
+        // Exit if current open handles count are under limit
+        if self.opened_count < max_open {return};
+        // opened_count cannot be greater then max_open
+        assert!(self.opened_count == max_open);
+
+        // Because of max_open >= 1
+        assert!(self.opened_count > 0);
+
+        // Search for high open
+        for state in self.states.iter_mut() {
+            if state.is_open() {
+                let was_open = state.load_all(
+                    &self.opts.immut,
+                    &mut process_dent!(self, state.depth()),
+                    &mut self.opts.ctx,
+                );
+                debug_assert!(was_open);
+                self.opened_count -= 1;
+                return;
+            }
         }
+
+        unreachable!()
     }
 
     fn push_dir_1(
@@ -336,18 +348,23 @@ where
             self.ancestors.push(ancestor);
         }
 
+        if let Some(_) = self.opts.immut.max_open {
+            self.opened_count += if state.is_open() {1} else {0};
+        };
         self.states.push(state);
     }
 
     fn pop_dir(&mut self) {
+        if let Some(_) = self.opts.immut.max_open {
+            if self.states.last().unwrap().is_open() {
+                self.opened_count -= 1;
+            }
+        }
+
         self.states.pop().expect("BUG: cannot pop from empty stack");
         if self.opts.immut.follow_links {
             self.ancestors.pop().expect("BUG: list/path stacks out of sync");
         }
-        // If everything in the stack is already closed, then there is
-        // room for at least one more open descriptor and it will
-        // always be at the top of the stack.
-        self.oldest_opened = cmp::min(self.oldest_opened, self.states.len());
     }
 
     /// Skips the current directory.
@@ -513,7 +530,7 @@ where
         {
             let prev_state = this.states.get_mut(cur_depth - 1).unwrap();
             match prev_state.get_current_position() {
-                Position::Entry(mut rflat) => {
+                InnerPositionWithData::Entry(mut rflat) => {
                     rflat.make_content_item(&mut this.opts.content_processor, &mut this.opts.ctx).unwrap()
                 }
                 _ => unreachable!(),
@@ -521,8 +538,8 @@ where
         }
 
         // Initial actions
-        if let Some(start) = self.start.take() {
-            if let Err(e) = self.init(&start) {
+        if let Some(root_path) = self.root.take() {
+            if let Err(e) = self.init(&root_path) {
                 return Position::Error(Error::from_inner(e, 0)).into_some();
                 // Here self.states is empty, so next call will always return None.
             };
@@ -536,7 +553,7 @@ where
 
             // Close one opened handle
             if self.transition_state == TransitionState::CloseOldestBeforePushDown {
-                self.load_oldest_opened();
+                self.check_max_open();
                 self.transition_state = TransitionState::BeforePushDown;
                 continue;
             }
@@ -544,7 +561,8 @@ where
             let cur_state = self.states.get_mut(cur_depth).unwrap();
 
             match cur_state.get_current_position() {
-                Position::BeforeContent(_) => {
+                // Before content
+                InnerPositionWithData::BeforeContent => {
                     // Before content of current dir
                     assert!(self.transition_state == TransitionState::None);
 
@@ -555,21 +573,28 @@ where
                         &mut self.opts.ctx,
                     );
 
-                    // At root we dont't yield Position::BeforeContent
+                    // At root we dont't yield Position::BeforeContent (BeforeContentWithContent)
                     if cur_depth == 0 {
                         continue;
                     }
-                    let content = cur_state.clone_all_content(
-                        ContentFilter::None,
-                        &self.opts.immut,
-                        &mut self.opts.content_processor,
-                        &mut process_dent!(self, cur_state.depth()),
-                        &mut self.opts.ctx,
-                    );
-                    let parent = get_parent_dent(self, cur_depth);
-                    return Position::BeforeContent((parent, content)).into_some();
-                }
-                Position::Entry(mut rflat) => {
+
+                    if self.opts.immut.yield_before_content_with_content {
+                        let content = cur_state.clone_all_content(
+                            self.opts.immut.before_content_filter,
+                            &self.opts.immut,
+                            &mut self.opts.content_processor,
+                            &mut process_dent!(self, cur_state.depth()),
+                            &mut self.opts.ctx,
+                        );
+                        let parent = get_parent_dent(self, cur_depth);
+                        return Position::BeforeContentWithContent(parent, content).into_some();
+                    } else {
+                        let parent = get_parent_dent(self, cur_depth);
+                        return Position::BeforeContent(parent).into_some();
+                    }
+                },
+                // At entry
+                InnerPositionWithData::Entry(mut rflat) => {
                     // Process entry
 
                     // Allow yield this entry if (require all):
@@ -694,7 +719,8 @@ where
                         };
                     }
                 }
-                Position::Error(rerr) => {
+                // At error
+                InnerPositionWithData::Error(rerr) => {
                     // Process error
                     assert!(self.transition_state == TransitionState::None);
 
@@ -707,7 +733,8 @@ where
                     );
                     return Position::Error(err).into_some();
                 }
-                Position::AfterContent => {
+                // After content of dir
+                InnerPositionWithData::AfterContent => {
                     // After content of current dir
 
                     // For root: stop the iterator (without yielding Position::AfterContent)

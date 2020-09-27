@@ -852,14 +852,15 @@ fn classic_contents_first_ordered() {
         .contents_first(false)
         .content_filter(ContentFilter::SkipAll)
         .sort_by(|(a, _), (b, _), _ctx| a.file_name().cmp(&b.file_name()))
+        .yield_before_content_with_content(true)
+        .before_content_filter(ContentFilter::FilesOnly)
         .into_iter();
     let mut r: Vec<(PathBuf, Vec<String>)> = vec![];
     while let Some(pos) = wd.next() {
         match pos {
-            Position::BeforeContent((dent, _content)) => {
+            Position::BeforeContentWithContent(dent, content) => {
                 let path = dent.path().to_path_buf();
-                let content = wd
-                    .get_current_dir_content(ContentFilter::FilesOnly)
+                let content = content
                     .iter()
                     .map(|dent| dent.file_name().to_str().unwrap().to_string())
                     .collect::<Vec<_>>();

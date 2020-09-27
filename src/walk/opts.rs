@@ -1,4 +1,3 @@
-//use std::cmp;
 use std::fmt;
 use std::result;
 
@@ -23,7 +22,7 @@ pub struct WalkDirOptionsImmut
     /// Yield loop symlinks (without following them) -- otherwise it will be interpreted as errors
     pub yield_loop_links: bool,
     /// Max count of opened dirs
-    pub max_open: usize,
+    pub max_open: Option<Depth>,
     /// Minimal depth for yield
     pub min_depth: Depth,
     /// Maximal depth for yield
@@ -36,6 +35,8 @@ pub struct WalkDirOptionsImmut
     pub content_order: ContentOrder,
     /// Yield Position::BeforeContent((dir, Same(ItemsCollection))) -- otherwise Position::BeforeContent((dir, None)) will be yielded
     pub yield_before_content_with_content: bool,
+    /// Filter content yielded in Position::BeforeContent (in Position::Entry(...))
+    pub before_content_filter: ContentFilter,
 }
 
 impl Default for WalkDirOptionsImmut {
@@ -44,13 +45,14 @@ impl Default for WalkDirOptionsImmut {
             same_file_system: false,
             follow_links: false,
             yield_loop_links: false,
-            max_open: 10,
+            max_open: Some(10),
             min_depth: 0,
             max_depth: ::std::usize::MAX,
             contents_first: false,
             content_filter: ContentFilter::None,
             content_order: ContentOrder::None,
             yield_before_content_with_content: false,
+            before_content_filter: ContentFilter::None,
         }
     }
 }
@@ -132,6 +134,7 @@ where
                 "yield_before_content_with_content",
                 &self.immut.yield_before_content_with_content,
             )
+            .field("before_content_filter", &self.immut.before_content_filter)
             .field("sorter", &sorter_str)
             .field("content_processor", &self.content_processor)
             .field("ctx", &self.ctx)
@@ -371,11 +374,8 @@ where
     /// On Windows, if `follow_links` is enabled, then this limit is not
     /// respected. In particular, the maximum number of file descriptors opened
     /// is proportional to the depth of the directory tree traversed.
-    pub fn max_open(mut self, mut n: usize) -> Self {
-        if n == 0 {
-            n = 1;
-        }
-        self.opts.immut.max_open = n;
+    pub fn max_open(mut self, n: Depth) -> Self {
+        self.opts.immut.max_open = if n > 0 {Some(n)} else {None};
         self
     }
 
@@ -488,6 +488,12 @@ where
         self.opts.immut.yield_before_content_with_content = yield_before_content_with_content;
         self
     }
+    /// A variants for filtering content
+    pub fn before_content_filter(mut self, filter: ContentFilter) -> Self {
+        self.opts.immut.before_content_filter = filter;
+        self
+    }
+
 }
 
 /////////////////////////////////////////////////////////////////////////

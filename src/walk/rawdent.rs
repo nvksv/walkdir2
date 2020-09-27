@@ -1,6 +1,6 @@
 use crate::error::{into_io_err, into_path_err, ErrorInner};
 use crate::fs::{self, FsRootDirEntry, FsReadDirIterator, FsFileType};
-use crate::wd::{self, FnCmp, IntoOk, IntoSome, Depth};
+use crate::wd::{self, FnCmp, IntoOk, IntoSome, IntoErr, Depth};
 use crate::cp::ContentProcessor;
 
 #[derive(Debug)]
@@ -382,7 +382,7 @@ pub enum ReadDir<E: fs::FsDirEntry> {
     /// The single item (used for root)
     Once { 
         /// Item to be returned
-        item: Option<RawDirEntry<E>> 
+        item: RawDirEntry<E> 
     },
 
     /// An opened handle.
@@ -406,17 +406,26 @@ pub enum ReadDir<E: fs::FsDirEntry> {
     Closed,
 
     /// Error on handle creating
-    Error(Option<ErrorInner<E>>),
+    Error {
+        /// Stored error
+        err: ErrorInner<E>,
+    },
+}
+
+macro_rules! extract_enum {
+    ($enum:expr, $case:path{$field:ident}, $newval:expr) => {
+        if let $case { $field } = std::mem::replace( $enum, $newval ) {$field} else {unreachable!()}
+    }
 }
 
 impl<E: fs::FsDirEntry> ReadDir<E> {
     
     /// Create new ReadDir returning one entry
     pub fn new_once(
-        raw: RawDirEntry<E>,
+        item: RawDirEntry<E>,
     ) -> wd::ResultInner<Self, E> {
         Self::Once { 
-            item: raw.into_some() 
+            item, 
         }.into_ok()
     }
 
@@ -426,7 +435,17 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
         //     Ok(rd) => Self::Opened { rd },
         //     Err(err) => Self::Error( Some(err) ),
         // }
-        Self::Opened { rd }
+        Self::Opened { 
+            rd 
+        }
+    }
+
+    /// Check if this is dir is opened (have underlying handle open)
+    pub fn is_open(&self) -> bool {
+        match self {
+            ReadDir::Opened { .. } => { true },
+            _ => { false },
+        }
     }
 
     /// Collect all content and make this ReadDir closed
@@ -436,6 +455,13 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
         ctx: &mut E::Context,
     ) -> Vec<T> {
         match self {
+            ReadDir::Once {..} => {
+                let item = extract_enum!( self, ReadDir::Once{item}, ReadDir::<E>::Closed );
+                match process_rawdent(Ok(item), ctx) {
+                    Some(t) => vec![t],
+                    None => vec![],
+                }
+            },
             ReadDir::Opened { rd } => {
                 let entries = ReadDirOpenedIterator::new( rd, process_rawdent, ctx )
                     .filter_map(|opt| opt)
@@ -443,26 +469,13 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
                 *self = ReadDir::<E>::Closed;
                 entries
             },
-            ReadDir::Once { item } => {
-                let entries = match item.take() {
-                    Some(raw) => match process_rawdent(Ok(raw), ctx) {
-                        Some(t) => vec![t],
-                        None => vec![],
-                    },
-                    None => vec![],
-                };
-                *self = ReadDir::<E>::Closed;
-                entries
-            },
             ReadDir::Closed => {
                 vec![]
             },
-            ReadDir::Error(ref mut oerr) => { 
-                match oerr.take() {
-                    Some(err) => match process_rawdent(Err(err), ctx) {
-                        Some(e) => vec![e],
-                        None => vec![],
-                    },
+            ReadDir::Error {..} => { 
+                let err = extract_enum!( self, ReadDir::Error{err}, ReadDir::<E>::Closed );
+                match process_rawdent(Err(err), ctx) {
+                    Some(e) => vec![e],
                     None => vec![],
                 }
             },
@@ -476,20 +489,30 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
         ctx: &mut E::Context,
     ) -> Option<wd::ResultInner<RawDirEntry<E>, E>> {
         match *self {
-            ReadDir::Once { ref mut item } => {
-                item.take().map(Ok)
+            ReadDir::Once {..} => {
+                let item = extract_enum!( self, ReadDir::Once{item}, ReadDir::<E>::Closed );
+                item.into_ok().into_some()
             },
             ReadDir::Opened { ref mut rd } => {
-                match rd.next_entry(ctx)? {
-                    Ok(fsdent)  => RawDirEntry::<E>::from_fsdent( fsdent, ctx ),
-                    Err(e)      => Err(into_io_err(e)),
-                }.into_some()
+                match rd.next_entry(ctx) {
+                    Some(r) => {
+                        match r {
+                            Ok(fsdent)  => RawDirEntry::<E>::from_fsdent( fsdent, ctx ),
+                            Err(e)      => Err(into_io_err(e)),
+                        }.into_some()
+                    },
+                    None => {
+                        *self = ReadDir::<E>::Closed;
+                        None
+                    },
+                }
             },
             ReadDir::Closed => {
                 None
             },
-            ReadDir::Error(ref mut err) => {
-                err.take().map(Err)
+            ReadDir::Error {..} => {
+                let err = extract_enum!( self, ReadDir::Error{err}, ReadDir::<E>::Closed );
+                err.into_err().into_some()
             },
         }
     }

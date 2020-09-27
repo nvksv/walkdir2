@@ -80,7 +80,7 @@ pub type FnCmp<E> = Box<
 //pub type ProcessDirEntry<E: storage::StorageExt> = self::Result<(DirEntry<E>, bool), E>
 
 /// A variants for filtering content
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ContentFilter {
     /// No filter, all content will be yielded (default)
     None,
@@ -93,7 +93,7 @@ pub enum ContentFilter {
 }
 
 /// A variants for ordering content
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ContentOrder {
     /// No arrange (default)
     None,
@@ -105,9 +105,11 @@ pub enum ContentOrder {
 
 /// A position in dirs tree
 #[derive(Debug, PartialEq, Eq)]
-pub enum Position<BC, EN, ER> {
+pub enum Position<EN, C, ER> {
     /// Before content of current dir
-    BeforeContent(BC),
+    BeforeContent(EN),
+    /// Before content of current dir with content
+    BeforeContentWithContent(EN, C),
     /// An entry
     Entry(EN),
     /// An error
@@ -116,4 +118,28 @@ pub enum Position<BC, EN, ER> {
     AfterContent,
 }
 
+/// A position in dirs tree
+#[derive(Debug, PartialEq, Eq)]
+pub enum InnerPosition {
+    /// Before content of current dir
+    BeforeContent,
+    /// An entry
+    Entry,
+    /// After content of current dir
+    AfterContent,
+}
+
+
+/// A position in dirs tree
+#[derive(Debug, PartialEq, Eq)]
+pub enum InnerPositionWithData<EN, ER> {
+    /// Before content of current dir
+    BeforeContent,
+    /// An entry
+    Entry(EN),
+    /// An error
+    Error(ER),
+    /// After content of current dir
+    AfterContent,
+}
 

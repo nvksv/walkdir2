@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::vec;
 
-use crate::wd::{self, ContentFilter, ContentOrder, Depth, FnCmp, IntoOk, Position};
+use crate::wd::{self, ContentFilter, ContentOrder, Depth, FnCmp, IntoOk, InnerPosition, InnerPositionWithData};
 use crate::fs;
 use crate::walk::rawdent::{RawDirEntry, ReadDir};
 use crate::cp::ContentProcessor;
@@ -140,6 +140,10 @@ where
         .into_ok()
     }
 
+    pub fn is_open(&self) -> bool {
+        self.rd.is_open()
+    }
+
     /// Load all remaining DirEntryRecord into tail of self.content.
     /// Doesn't change position.
     pub fn load_all(
@@ -150,14 +154,19 @@ where
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
         ctx: &mut E::Context,
-    ) {
+    ) -> bool {
+        let was_open = self.rd.is_open();
+
         let mut collected = self.rd.collect_all(&mut |r_rawdent, ctx| Self::new_rec(r_rawdent, opts_immut, process_rawdent, ctx), ctx);
 
         if self.content.is_empty() {
             self.content = collected;
         } else {
             self.content.append(&mut collected);
-        }
+        };
+
+        debug_assert!(self.rd.is_open() == false);
+        was_open
     }
 
     /// Makes new DirEntryRecord from processed Result<DirEntry> or rejects it.
@@ -395,7 +404,7 @@ where
     /// Current pass
     pass: DirPass,
     /// Current position
-    position: Position<(), (), ()>,
+    position: InnerPosition,
 
     /// Stub
     _cp: std::marker::PhantomData<CP>,
@@ -437,7 +446,7 @@ where
             depth,
             content: DirContent::<E, CP>::new_once(raw)?,
             pass: get_initial_pass(opts_immut),
-            position: Position::BeforeContent(()),
+            position: InnerPosition::BeforeContent,
             _cp: std::marker::PhantomData,
         };
         this.init(opts_immut, sorter, process_rawdent, ctx);
@@ -460,11 +469,15 @@ where
             depth,
             content: DirContent::<E, CP>::new(parent, ctx)?,
             pass: get_initial_pass(opts_immut),
-            position: Position::BeforeContent(()),
+            position: InnerPosition::BeforeContent,
             _cp: std::marker::PhantomData,
         };
         this.init(opts_immut, sorter, process_rawdent, ctx);
         this.into_ok()
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.content.is_open()
     }
 
     /// Load all remaining DirEntryRecord into tail of self.content.
@@ -477,7 +490,7 @@ where
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
         ctx: &mut E::Context,
-    ) {
+    ) -> bool {
         self.content.load_all(opts_immut, process_rawdent, ctx)
     }
 
@@ -511,7 +524,7 @@ where
 
             match self.pass {
                 DirPass::Entire | DirPass::Second => {
-                    self.position = Position::AfterContent;
+                    self.position = InnerPosition::AfterContent;
                     return false;
                 }
                 DirPass::First => {
@@ -534,15 +547,15 @@ where
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
         ctx: &mut E::Context,
     ) {
-        if self.position == Position::AfterContent {
+        if self.position == InnerPosition::AfterContent {
             return;
         };
 
         if self.shift_next(opts_immut, process_rawdent, ctx) {
             // Remember: at this state current rec must exist
-            self.position = Position::Entry(());
+            self.position = InnerPosition::Entry;
         } else {
-            self.position = Position::AfterContent;
+            self.position = InnerPosition::AfterContent;
         };
     }
 
@@ -550,18 +563,17 @@ where
     /// Doesn't change position.
     pub fn get_current_position(
         &mut self,
-    ) -> Position<(), FlatDirEntryRef<'_, E, CP>, ErrorInnerRef<'_, E>> {
+    ) -> InnerPositionWithData<FlatDirEntryRef<'_, E, CP>, ErrorInnerRef<'_, E>> {
         match self.position {
-            Position::BeforeContent(_) => Position::BeforeContent(()),
-            Position::Entry(_) => {
+            InnerPosition::BeforeContent => InnerPositionWithData::BeforeContent,
+            InnerPosition::Entry => {
                 // At this state current rec must exist
                 match self.content.get_current_rec(self.depth) {
-                    Ok(flat) => Position::Entry(flat),
-                    Err(err) => Position::Error(err),
+                    Ok(flat) => InnerPositionWithData::Entry(flat),
+                    Err(err) => InnerPositionWithData::Error(err),
                 }
             }
-            Position::AfterContent => Position::AfterContent,
-            _ => unreachable!(),
+            InnerPosition::AfterContent => InnerPositionWithData::AfterContent,
         }
     }
 
@@ -613,6 +625,6 @@ where
     }
 
     pub fn skip_all(&mut self) {
-        self.position = Position::AfterContent;
+        self.position = InnerPosition::AfterContent;
     }
 }
