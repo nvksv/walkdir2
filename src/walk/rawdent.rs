@@ -84,7 +84,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
 
     /// Follow symlink and makes new object
     pub fn follow(self, ctx: &mut E::Context) -> wd::ResultInner<Self, E> {
-        let ty = self.file_type_internal(true, ctx)?;
+        let ty = self.file_type_follow(ctx)?;
         Self {
             kind:           self.kind,
             follow_link:    true,
@@ -162,19 +162,19 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
         }.map_err(into_io_err)
     }
 
-    pub(crate) fn file_type_internal(
+    /// Return the type at the target of symlink.
+    pub fn file_type_follow(
         &self,
-        follow_link: bool,
         ctx: &mut E::Context,
     ) -> wd::ResultInner<E::FileType, E> {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
-                fsdent.file_type( follow_link, ctx )
+                fsdent.file_type( true, ctx )
             },
             RawDirEntryKind::DirEntry { fsdent, .. } => {
-                fsdent.file_type( follow_link, ctx )
+                fsdent.file_type( true, ctx )
             },
-        }.map_err(into_io_err)
+        }.map_err(|err| into_path_err(self.path(), err))
     }
 
     /// Return the file type for the file that this entry points to.
@@ -189,21 +189,6 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
         &self
     ) -> E::FileType {
         self.ty
-    }
-
-    /// Return the file type for the file that this entry points to.
-    ///
-    /// If this is a symbolic link and [`follow_links`] is `true`, then this
-    /// returns the type of the target.
-    ///
-    /// This never makes any system calls.
-    ///
-    /// [`follow_links`]: struct.WalkDir.html#method.follow_links
-    pub fn file_type_follow(
-        &self,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<E::FileType, E> {
-        self.file_type_internal(true, ctx)
     }
 
     /// Return the file type for the file that this entry points to.
