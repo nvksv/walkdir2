@@ -33,7 +33,7 @@ pub type DefaultDirEntry = WindowsDirEntry;
 /// Functions for FsMetadata
 pub trait FsError: 'static + std::error::Error + Debug {
     /// Inner error type
-    type Inner: std::error::Error;
+    type Inner;
 
     /// Creates a new I/O error from a known kind of error as well as an arbitrary error payload.
     fn from_inner(error: Self::Inner) -> Self;
@@ -70,7 +70,7 @@ pub trait FsReadDirIterator: Debug + Sized {
     type Context: Debug;
 
     /// Associated error type
-    type Error: std::error::Error;
+    type Error;
     /// Associated FsDirEntry implementation type
     type DirEntry;
 
@@ -121,21 +121,6 @@ impl<RD> FsReadDirIterator for RD where RD: FsReadDir {
         self.next_fsentry(ctx)
     }
 }
-
-// impl<RD, DE, E> FsReadDirIterator for RD where 
-//     RD: Iterator<Item=Result<DE, E>>,
-// {
-//     type Context    = ();
-//     type Error      = E;
-//     type DirEntry   = DE;
-
-//     fn next_entry(
-//         &mut self,
-//         ctx: &mut Self::Context,
-//     ) -> Option<Result<Self::DirEntry, Self::Error>> {
-//         self.next()
-//     }
-// }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
