@@ -120,22 +120,10 @@ pub mod cp;
 #[cfg(test)]
 mod tests;
 
-// pub use crate::dent::DirEntry;
-// #[cfg(unix)]
-// pub use crate::dent::DirEntryExt;
-
-// pub use crate::classic_iter::ClassicWalkDirIter;
-// pub use crate::cp::{ContentProcessor, DirEntryContentProcessor};
-// pub use crate::iter::{FilterEntry, WalkDirIter};
-// pub use crate::opts::WalkDirBuilder;
-// pub use crate::storage::{StoragePath, StoragePathBuf};
-// pub use crate::walk::WalkDirIterator;
-// pub use crate::wd::{ContentFilter, ContentOrder, Depth, Position, WalkDirIteratorItem};
-
 /// Default (classic) WalkDir
 pub type WalkDir = WalkDirBuilder<fs::DefaultDirEntry, cp::DirEntryContentProcessor>;
 
-pub use wd::{ContentFilter, ContentOrder, Depth, FnCmp, Position, Result, ResultInner, IntoSome, IntoOk, IntoErr};
+pub use wd::{ContentFilter, ContentOrder, Depth, FnCmp, Position, Result, ResultInner};
 pub use walk::{ClassicFilterEntry, ClassicIter, ClassicWalkDirIter, FilterEntry, RawDirEntry, ReadDir, WalkDirBuilder, WalkDirIter, WalkDirIterator, WalkDirIteratorItem, WalkDirOptions};
 pub use error::Error;
 pub use cp::DirEntry;
