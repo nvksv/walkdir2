@@ -36,7 +36,7 @@ pub trait FsError: 'static + std::error::Error + Debug {
     type Inner;
 
     /// Creates a new I/O error from a known kind of error as well as an arbitrary error payload.
-    fn from_inner(error: Self::Inner) -> Self;
+    fn from_inner(inner: Self::Inner) -> Self;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
