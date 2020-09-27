@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::tests::util::Dir;
-use crate::{ClassicWalkDirIter, ContentFilter, ContentOrder, Position, WalkDir, WalkDirIter, FsDirEntry};
+use crate::{ClassicWalkDirIter, ContentFilter, ContentOrder, Position, WalkDir, WalkDirIter, fs::FsDirEntry};
 
 /// Check for defaulted type parameter bug
 /// See https://github.com/rust-lang/rust/issues/27336

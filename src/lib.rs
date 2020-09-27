@@ -111,9 +111,11 @@ doc_comment::doctest!("../README.md");
 
 mod wd;
 mod error;
-mod fs;
+/// Filesystem-specific parts
+pub mod fs;
 mod walk;
-mod cp;
+/// Content processor
+pub mod cp;
 
 #[cfg(test)]
 mod tests;
@@ -131,13 +133,11 @@ mod tests;
 // pub use crate::wd::{ContentFilter, ContentOrder, Depth, Position, WalkDirIteratorItem};
 
 /// Default (classic) WalkDir
-pub type WalkDir = WalkDirBuilder<fs::DefaultDirEntry, DirEntryContentProcessor>;
+pub type WalkDir = WalkDirBuilder<fs::DefaultDirEntry, cp::DirEntryContentProcessor>;
 
 pub use wd::{ContentFilter, ContentOrder, Depth, FnCmp, Position, Result, ResultInner};
 pub use walk::{ClassicFilterEntry, ClassicIter, ClassicWalkDirIter, FilterEntry, RawDirEntry, ReadDir, WalkDirBuilder, WalkDirIter, WalkDirIterator, WalkDirIteratorItem, WalkDirOptions};
 pub use error::Error;
-pub use fs::*;
-//pub use fs::{DefaultDirEntry, FsDirEntry, FsError, FsFileType, FsMetadata, FsPath, FsPathBuf, FsReadDir, FsReadDirIterator, FsRootDirEntry, StandardDirEntry, StandardDirFingerprint, StandardReadDir, StandardRootDirEntry, };
-pub use cp::*;
+pub use cp::DirEntry;
 
 
