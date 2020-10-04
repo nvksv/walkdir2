@@ -612,12 +612,12 @@ where
                     if rflat.is_dir() {
                         // Process dir entry
 
-                        // If (cur_depth + 1) still in allowed range ...
-                        let allow_push = cur_depth < self.opts.immut.max_depth;
-
                         match self.transition_state {
                             // First step
                             TransitionState::None => {
+                                // If (cur_depth + 1) still in allowed range ...
+                                let allow_push = cur_depth < self.opts.immut.max_depth && rflat.allow_push(&self.opts.content_processor);
+
                                 if allow_push {
                                     // Check if rflat is loop link
                                     if let Some(loop_depth) = rflat.loop_link() {

@@ -324,19 +324,22 @@ where
 
     pub fn make_content_item (
         &mut self,
-        content_processor: &mut CP,
+        content_processor: &CP,
         ctx: &mut E::Context,
     ) -> Option<CP::Item> {
         self.flat.raw.make_content_item( content_processor, self.flat.is_dir, self.depth, ctx )
     }
 
+    pub fn allow_push (
+        &mut self,
+        content_processor: &CP,
+    ) -> bool {
+        self.flat.raw.allow_push( content_processor )
+    }
+
     pub fn as_flat(&self) -> &FlatDirEntry<E> {
         self.flat
     }
-
-    // pub fn depth(&self) -> Depth {
-    //     self.depth
-    // }
 
     pub fn is_dir(&self) -> bool {
         self.flat.is_dir

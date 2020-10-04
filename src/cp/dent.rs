@@ -198,6 +198,13 @@ impl<E: fs::FsDirEntry> ContentProcessor<E> for DirEntryContentProcessor {
     type Item = DirEntry<E>;
     type Collection = Vec<DirEntry<E>>;
 
+    fn allow_push(
+        &self,
+        _fsdent: &E,
+    ) -> bool {
+        true
+    }
+
     /// Convert RawDirEntry into final entry type (e.g. DirEntry)
     fn process_root_direntry(
         &self,

@@ -313,6 +313,21 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
         }
     }
 
+    /// Check if walking into this entry is allowed
+    pub fn allow_push<CP: ContentProcessor<E>>(
+        &self,
+        content_processor: &CP,
+    ) -> bool {
+        match &self.kind {
+            RawDirEntryKind::Root { .. } => {
+                true
+            },
+            RawDirEntryKind::DirEntry { fsdent, .. } => {
+                content_processor.allow_push( fsdent )
+            },
+        }
+    }
+
     // pub fn error_inner_from_entry(&self, err: E::Error) -> ErrorInner<E> {
     //     ErrorInner::<E>::from_entry(self.get_fs_dir_entry().unwrap(), err)
     // }

@@ -5,14 +5,21 @@ use crate::wd::Depth;
 
 pub use dent::{DirEntry, DirEntryContentProcessor};
 
-use std::iter::FromIterator;
+//use std::iter::FromIterator;
 
 /// Convertor from RawDirEntry into final entry type (e.g. DirEntry)
 pub trait ContentProcessor<E: fs::FsDirEntry>: std::fmt::Debug {
     /// Final entry type
     type Item;
     /// Collection of items
-    type Collection: FromIterator<Self::Item>;
+//    type Collection: FromIterator<Self::Item>;
+    type Collection;
+
+    /// Allow fsdent to be walked
+    fn allow_push (
+        &self,
+        fsdent: &E,
+    ) -> bool;
 
     /// Convert RawDirEntry into final entry type (e.g. DirEntry)
     fn process_root_direntry(
