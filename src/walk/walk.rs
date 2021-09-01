@@ -39,11 +39,11 @@ macro_rules! process_dent {
         process_dent!(&$self.opts.immut, &$self.root_device, &$self.ancestors, $depth)
     };
     ($opts_immut:expr, $root_device:expr, $ancestors:expr, $depth:expr) => {
-        ((|opts_immut, root_device, ancestors, depth| {
+        (|opts_immut, root_device, ancestors, depth| {
             move |raw_dent: RawDirEntry<E>, ctx: &mut E::Context| {
                 Self::process_rawdent(raw_dent, depth, opts_immut, root_device, ancestors, ctx)
             }
-        })($opts_immut, $root_device, $ancestors, $depth))
+        })($opts_immut, $root_device, $ancestors, $depth)
     };
 }
 
@@ -253,6 +253,7 @@ where
             &self.opts.immut,
             &mut self.opts.sorter,
             &mut process_dent!(self, depth),
+            &mut self.opened_count,
             &mut self.opts.ctx,
         )?;
 
@@ -279,10 +280,10 @@ where
                 let was_open = state.load_all(
                     &self.opts.immut,
                     &mut process_dent!(self, state.depth()),
+                    &mut self.opened_count,
                     &mut self.opts.ctx,
                 );
                 debug_assert!(was_open);
-                self.opened_count -= 1;
                 return;
             }
         }
@@ -297,6 +298,7 @@ where
         sorter: &mut Option<FnCmp<E>>,
         root_device: &Option<E::DeviceNum>,
         ancestors: &Vec<Ancestor<E>>,
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> wd::ResultInner<PushDirData<E, CP>, E> {
         // This is safe as we makes any changes strictly AFTER using dent_ptr.
@@ -311,6 +313,7 @@ where
             opts_immut,
             sorter,
             &mut process_dent!(opts_immut, root_device, ancestors, new_depth),
+            opened_count,
             ctx,
         )?;
 
@@ -348,18 +351,19 @@ where
             self.ancestors.push(ancestor);
         }
 
-        if let Some(_) = self.opts.immut.max_open {
-            self.opened_count += if state.is_open() {1} else {0};
-        };
+        // if self.opts.immut.max_open.is_some() && state.is_open() {
+        //     self.opened_count += 1;
+        // };
+
         self.states.push(state);
     }
 
     fn pop_dir(&mut self) {
-        if let Some(_) = self.opts.immut.max_open {
+        // if self.opts.immut.max_open.is_some() {
             if self.states.last().unwrap().is_open() {
                 self.opened_count -= 1;
             }
-        }
+        // }
 
         self.states.pop().expect("BUG: cannot pop from empty stack");
         if self.opts.immut.follow_links {
@@ -476,6 +480,7 @@ where
             &self.opts.immut,
             &mut self.opts.content_processor,
             &mut process_dent!(self, cur_state.depth()),
+            &mut self.opened_count,
             &mut self.opts.ctx,
         );
 
@@ -489,6 +494,7 @@ macro_rules! next_and_yield_rflat {
         $cur_state.next_position(
             &$self.opts.immut,
             &mut process_dent!($self, $cur_depth),
+            &mut $self.opened_count,
             &mut $self.opts.ctx,
         );
         if let Some(dent) = odent {
@@ -570,6 +576,7 @@ where
                     cur_state.next_position(
                         &self.opts.immut,
                         &mut process_dent!(self, cur_depth),
+                        &mut self.opened_count,
                         &mut self.opts.ctx,
                     );
 
@@ -584,6 +591,7 @@ where
                             &self.opts.immut,
                             &mut self.opts.content_processor,
                             &mut process_dent!(self, cur_state.depth()),
+                            &mut self.opened_count,
                             &mut self.opts.ctx,
                         );
                         let parent = get_parent_dent(self, cur_depth);
@@ -667,6 +675,7 @@ where
                                     &mut self.opts.sorter,
                                     &self.root_device,
                                     &self.ancestors,
+                                    &mut self.opened_count,
                                     &mut self.opts.ctx,
                                 ) {
                                     Ok(data) => {
@@ -696,6 +705,7 @@ where
                                     cur_state.next_position(
                                         &self.opts.immut,
                                         &mut process_dent!(self, cur_depth),
+                                        &mut self.opened_count,
                                         &mut self.opts.ctx,
                                     );
                                 };
@@ -714,6 +724,7 @@ where
                             cur_state.next_position(
                                 &self.opts.immut,
                                 &mut process_dent!(self, cur_depth),
+                                &mut self.opened_count,
                                 &mut self.opts.ctx,
                             );
                         };
@@ -729,6 +740,7 @@ where
                     cur_state.next_position(
                         &self.opts.immut,
                         &mut process_dent!(self, cur_depth),
+                        &mut self.opened_count,
                         &mut self.opts.ctx,
                     );
                     return Position::Error(err).into_some();

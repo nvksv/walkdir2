@@ -129,10 +129,11 @@ where
     /// New DirContent from FsReadDir
     pub fn new(
         parent: &RawDirEntry<E>, 
+        opened_count: &mut Depth,
         ctx: &mut E::Context
     ) -> wd::ResultInner<Self, E> {
         Self {
-            rd: parent.read_dir(ctx)?,
+            rd: parent.read_dir(opened_count, ctx)?,
             content: vec![],
             current_pos: None,
             _cp: std::marker::PhantomData,
@@ -153,11 +154,12 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> bool {
         let was_open = self.rd.is_open();
 
-        let mut collected = self.rd.collect_all(&mut |r_rawdent, ctx| Self::new_rec(r_rawdent, opts_immut, process_rawdent, ctx), ctx);
+        let mut collected = self.rd.collect_all(&mut |r_rawdent, ctx| Self::new_rec(r_rawdent, opts_immut, process_rawdent, ctx), opened_count, ctx);
 
         if self.content.is_empty() {
             self.content = collected;
@@ -198,6 +200,7 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> Option<(bool, bool)> {
         loop {
@@ -208,7 +211,7 @@ where
                 return Some((rec.first_pass, rec.can_be_yielded()));
             }
 
-            if let Some(r_rawdent) = self.rd.next(ctx) {
+            if let Some(r_rawdent) = self.rd.next(opened_count, ctx) {
                 let rec = match Self::new_rec(r_rawdent, opts_immut, process_rawdent, ctx) {
                     Some(rec) => rec,
                     None => continue,
@@ -274,9 +277,10 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) {
-        self.load_all(opts_immut, process_rawdent, ctx);
+        self.load_all(opts_immut, process_rawdent, opened_count, ctx);
         self.sort_content_and_rewind(cmp, ctx);
     }
 
@@ -426,10 +430,11 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) {
         if let Some(cmp) = sorter {
-            self.content.load_all_and_sort(opts_immut, cmp, process_rawdent, ctx);
+            self.content.load_all_and_sort(opts_immut, cmp, process_rawdent, opened_count, ctx);
         }
     }
 
@@ -443,6 +448,7 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> wd::ResultInner<Self, E> {
         let mut this = Self {
@@ -452,7 +458,7 @@ where
             position: InnerPosition::BeforeContent,
             _cp: std::marker::PhantomData,
         };
-        this.init(opts_immut, sorter, process_rawdent, ctx);
+        this.init(opts_immut, sorter, process_rawdent, opened_count, ctx);
         this.into_ok()
     }
 
@@ -466,16 +472,17 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> wd::ResultInner<Self, E> {
         let mut this = Self {
             depth,
-            content: DirContent::<E, CP>::new(parent, ctx)?,
+            content: DirContent::<E, CP>::new(parent, opened_count, ctx)?,
             pass: get_initial_pass(opts_immut),
             position: InnerPosition::BeforeContent,
             _cp: std::marker::PhantomData,
         };
-        this.init(opts_immut, sorter, process_rawdent, ctx);
+        this.init(opts_immut, sorter, process_rawdent, opened_count, ctx);
         this.into_ok()
     }
 
@@ -492,9 +499,10 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> bool {
-        self.content.load_all(opts_immut, process_rawdent, ctx)
+        self.content.load_all(opts_immut, process_rawdent, opened_count, ctx)
     }
 
     /// Gets next record (according to content order and filter).
@@ -506,11 +514,12 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> bool {
         loop {
             if let Some((first_pass, can_be_yielded)) =
-                self.content.get_next_rec(opts_immut, process_rawdent, ctx)
+                self.content.get_next_rec(opts_immut, process_rawdent, opened_count, ctx)
             {
                 let valid_pass = match self.pass {
                     DirPass::Entire => true,
@@ -548,13 +557,14 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) {
         if self.position == InnerPosition::AfterContent {
             return;
         };
 
-        if self.shift_next(opts_immut, process_rawdent, ctx) {
+        if self.shift_next(opts_immut, process_rawdent, opened_count, ctx) {
             // Remember: at this state current rec must exist
             self.position = InnerPosition::Entry;
         } else {
@@ -591,9 +601,10 @@ where
             RawDirEntry<E>,
             &mut E::Context,
         ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> CP::Collection {
-        self.content.load_all(opts_immut, process_rawdent, ctx);
+        self.content.load_all(opts_immut, process_rawdent, opened_count, ctx);
 
         let depth = self.depth();
 

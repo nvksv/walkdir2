@@ -263,6 +263,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// Get ReadDir object for this entry
     pub fn read_dir(
         &self, 
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> wd::ResultInner<ReadDir<E>, E> {
         let rd = match &self.kind {
@@ -273,7 +274,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
                 fsdent.read_dir( ctx )
             },
         }.map_err(into_io_err)?;
-        ReadDir::<E>::new(rd).into_ok()
+        ReadDir::<E>::new(rd, opened_count).into_ok()
     }
 
     fn as_fsdent_ty(&self) -> Option<(&E, &E::FileType)> {
@@ -445,11 +446,12 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
     }
 
     /// Create new ReadDir
-    fn new(rd: E::ReadDir) -> Self {
-        // match rd {
-        //     Ok(rd) => Self::Opened { rd },
-        //     Err(err) => Self::Error( Some(err) ),
-        // }
+    fn new(
+        rd: E::ReadDir,
+        opened_count: &mut Depth,
+    ) -> Self {
+        *opened_count += 1;
+
         Self::Opened { 
             rd 
         }
@@ -467,6 +469,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
     pub fn collect_all<T>(
         &mut self,
         process_rawdent: &mut impl (FnMut(wd::ResultInner<RawDirEntry<E>, E>, &mut E::Context) -> Option<T>),
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> Vec<T> {
         match self {
@@ -482,6 +485,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
                     .filter_map(|opt| opt)
                     .collect();
                 *self = ReadDir::<E>::Closed;
+                *opened_count -= 1;
                 entries
             },
             ReadDir::Closed => {
@@ -501,6 +505,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
     #[inline(always)]
     pub fn next(
         &mut self,
+        opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) -> Option<wd::ResultInner<RawDirEntry<E>, E>> {
         match *self {
@@ -518,6 +523,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
                     },
                     None => {
                         *self = ReadDir::<E>::Closed;
+                        *opened_count -= 1;
                         None
                     },
                 }
