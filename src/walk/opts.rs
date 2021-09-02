@@ -388,7 +388,7 @@ where
     /// ```rust,no_run
     /// use std::cmp;
     /// use std::ffi::OsString;
-    /// use walkdir2::{WalkDir, FsDirEntry};
+    /// use walkdir2::{WalkDir, fs::FsDirEntry};
     ///
     /// WalkDir::new("foo").sort_by(|a,b,_ctx| a.0.file_name().cmp(&b.0.file_name())).into_classic();
     /// ```

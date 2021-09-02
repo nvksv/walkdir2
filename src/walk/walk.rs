@@ -34,6 +34,10 @@ use crate::wd::{
 //     };
 // }
 
+macro_rules! debug {
+    ($($arg:tt)*) => (if cfg!(debug_assertions) { $($arg)* })
+}
+
 macro_rules! process_dent {
     ($self:expr, $depth:expr) => {
         process_dent!(&$self.opts.immut, &$self.root_device, &$self.ancestors, $depth)
@@ -170,6 +174,21 @@ where
             depth: 0,
             root_device: None,
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn do_debug_checks(&self) {
+        
+        // Check opened_count
+        let mut real_count: Depth = 0;
+        for state in &self.states {
+            if state.is_open() {
+                real_count += 1;
+            }
+        }
+
+        assert_eq!( self.opened_count, real_count );
+
     }
 
     // Follow symlinks and check same_file_system. Also determine is_dir flag.
@@ -359,16 +378,15 @@ where
     }
 
     fn pop_dir(&mut self) {
-        // if self.opts.immut.max_open.is_some() {
-            if self.states.last().unwrap().is_open() {
-                self.opened_count -= 1;
-            }
-        // }
 
-        self.states.pop().expect("BUG: cannot pop from empty stack");
+        let last_state = self.states.pop().expect("BUG: cannot pop from empty stack");
+        last_state.on_drop(&mut self.opened_count);
+
         if self.opts.immut.follow_links {
             self.ancestors.pop().expect("BUG: list/path stacks out of sync");
         }
+
+        debug!(self.do_debug_checks());
     }
 
     /// Skips the current directory.
@@ -546,6 +564,7 @@ where
         // Initial actions
         if let Some(root_path) = self.root.take() {
             if let Err(e) = self.init(&root_path) {
+                debug!(self.do_debug_checks());
                 return Position::Error(Error::from_inner(e, 0)).into_some();
                 // Here self.states is empty, so next call will always return None.
             };
@@ -595,9 +614,11 @@ where
                             &mut self.opts.ctx,
                         );
                         let parent = get_parent_dent(self, cur_depth);
+                        debug!(self.do_debug_checks());
                         return Position::BeforeContentWithContent(parent, content).into_some();
                     } else {
                         let parent = get_parent_dent(self, cur_depth);
+                        debug!(self.do_debug_checks());
                         return Position::BeforeContent(parent).into_some();
                     }
                 },
@@ -639,6 +660,7 @@ where
                                                 loop_depth,
                                                 rflat.path(),
                                             );
+                                            debug!(self.do_debug_checks());
                                             return Position::Error(Error::from_inner(
                                                 err, cur_depth,
                                             ))
@@ -685,6 +707,7 @@ where
                                         // Jump to last step
                                         self.transition_state = TransitionState::AfterPopUp;
                                         // And yield an error
+                                        debug!(self.do_debug_checks());
                                         return Position::Error(Error::from_inner(
                                             err, cur_depth,
                                         ))
@@ -743,6 +766,7 @@ where
                         &mut self.opened_count,
                         &mut self.opts.ctx,
                     );
+                    debug!(self.do_debug_checks());
                     return Position::Error(err).into_some();
                 }
                 // After content of dir
@@ -759,6 +783,7 @@ where
                         TransitionState::None => {
                             // Just yield Position::AfterContent
                             self.transition_state = TransitionState::BeforePopUp;
+                            debug!(self.do_debug_checks());
                             return Position::AfterContent.into_some();
                         }
                         // Second step: surface to parent

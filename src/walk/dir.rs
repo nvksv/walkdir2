@@ -141,6 +141,10 @@ where
         .into_ok()
     }
 
+    pub fn on_drop(&self, opened_count: &mut Depth) {
+        self.rd.on_drop( opened_count );
+    }
+
     pub fn is_open(&self) -> bool {
         self.rd.is_open()
     }
@@ -484,6 +488,10 @@ where
         };
         this.init(opts_immut, sorter, process_rawdent, opened_count, ctx);
         this.into_ok()
+    }
+
+    pub fn on_drop(&self, opened_count: &mut Depth) {
+        self.content.on_drop( opened_count );
     }
 
     pub fn is_open(&self) -> bool {

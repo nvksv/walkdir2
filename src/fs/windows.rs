@@ -65,7 +65,7 @@ pub struct WindowsDirEntry {
     ///
     /// We use this to determine whether an entry is a directory or not, which
     /// works around a bug in Rust's standard library:
-    /// https://github.com/rust-lang/rust/issues/46484
+    /// <https://github.com/rust-lang/rust/issues/46484>
     metadata: fs::Metadata,
 }
 

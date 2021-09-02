@@ -457,6 +457,13 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
         }
     }
 
+    /// This function must be called before dropping this object
+    pub fn on_drop(&self, opened_count: &mut Depth) {
+        if let ReadDir::Opened { .. } = self {
+            *opened_count -= 1;
+        }
+    }
+
     /// Check if this is dir is opened (have underlying handle open)
     pub fn is_open(&self) -> bool {
         match self {
