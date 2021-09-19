@@ -459,7 +459,7 @@ where
             depth,
             content: DirContent::<E, CP>::new_once(raw)?,
             pass: get_initial_pass(opts_immut),
-            position: InnerPosition::BeforeContent,
+            position: InnerPosition::OpenDir,
             _cp: std::marker::PhantomData,
         };
         this.init(opts_immut, sorter, process_rawdent, opened_count, ctx);
@@ -483,7 +483,7 @@ where
             depth,
             content: DirContent::<E, CP>::new(parent, opened_count, ctx)?,
             pass: get_initial_pass(opts_immut),
-            position: InnerPosition::BeforeContent,
+            position: InnerPosition::OpenDir,
             _cp: std::marker::PhantomData,
         };
         this.init(opts_immut, sorter, process_rawdent, opened_count, ctx);
@@ -544,7 +544,7 @@ where
 
             match self.pass {
                 DirPass::Entire | DirPass::Second => {
-                    self.position = InnerPosition::AfterContent;
+                    self.position = InnerPosition::CloseDir;
                     return false;
                 }
                 DirPass::First => {
@@ -568,7 +568,7 @@ where
         opened_count: &mut Depth,
         ctx: &mut E::Context,
     ) {
-        if self.position == InnerPosition::AfterContent {
+        if self.position == InnerPosition::CloseDir {
             return;
         };
 
@@ -576,7 +576,7 @@ where
             // Remember: at this state current rec must exist
             self.position = InnerPosition::Entry;
         } else {
-            self.position = InnerPosition::AfterContent;
+            self.position = InnerPosition::CloseDir;
         };
     }
 
@@ -586,7 +586,7 @@ where
         &mut self,
     ) -> InnerPositionWithData<FlatDirEntryRef<'_, E, CP>, ErrorInnerRef<'_, E>> {
         match self.position {
-            InnerPosition::BeforeContent => InnerPositionWithData::BeforeContent,
+            InnerPosition::OpenDir => InnerPositionWithData::OpenDir,
             InnerPosition::Entry => {
                 // At this state current rec must exist
                 match self.content.get_current_rec(self.depth) {
@@ -594,7 +594,7 @@ where
                     Err(err) => InnerPositionWithData::Error(err),
                 }
             }
-            InnerPosition::AfterContent => InnerPositionWithData::AfterContent,
+            InnerPosition::CloseDir => InnerPositionWithData::CloseDir,
         }
     }
 
@@ -647,6 +647,6 @@ where
     }
 
     pub fn skip_all(&mut self) {
-        self.position = InnerPosition::AfterContent;
+        self.position = InnerPosition::CloseDir;
     }
 }

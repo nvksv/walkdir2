@@ -33,9 +33,9 @@ pub struct WalkDirOptionsImmut
     pub content_filter: ContentFilter,
     /// Control order of files and dirs
     pub content_order: ContentOrder,
-    /// Yield Position::BeforeContent((dir, Same(ItemsCollection))) -- otherwise Position::BeforeContent((dir, None)) will be yielded
+    /// Yield Position::OpenDir((dir, Same(ItemsCollection))) -- otherwise Position::OpenDir((dir, None)) will be yielded
     pub yield_before_content_with_content: bool,
-    /// Filter content yielded in Position::BeforeContent (in Position::Entry(...))
+    /// Filter content yielded in Position::OpenDir (in Position::Entry(...))
     pub before_content_filter: ContentFilter,
 }
 

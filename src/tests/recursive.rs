@@ -858,7 +858,7 @@ fn classic_contents_first_ordered() {
     let mut r: Vec<(PathBuf, Vec<String>)> = vec![];
     while let Some(pos) = wd.next() {
         match pos {
-            Position::BeforeContentWithContent(dent, content) => {
+            Position::OpenDirWithContent(dent, content) => {
                 let path = dent.path().to_path_buf();
                 let content = content
                     .iter()
@@ -867,7 +867,7 @@ fn classic_contents_first_ordered() {
 
                 r.push((path, content));
             }
-            Position::AfterContent => {}
+            Position::CloseDir => {}
             _ => panic!(),
         }
     }
@@ -938,7 +938,7 @@ fn skip_current_dir() {
     while let Some(result) = it.next() {
         let ent = match result {
             Position::Entry(ent) => ent,
-            Position::BeforeContent(_) | Position::AfterContent => continue,
+            Position::OpenDir(_) | Position::CloseDir => continue,
             _ => panic!(),
         };
         paths.push(ent.path().to_path_buf());

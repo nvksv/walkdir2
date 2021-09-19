@@ -88,7 +88,7 @@ pub enum ContentFilter {
     FilesOnly,
     /// Yield dirs only
     DirsOnly,
-    /// Skip all (only BeforeContent(dent) and AfterContent will be yielded)
+    /// Skip all (only OpenDir(dent) and CloseDir will be yielded)
     SkipAll,
 }
 
@@ -107,26 +107,26 @@ pub enum ContentOrder {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Position<EN, C, ER> {
     /// Before content of current dir
-    BeforeContent(EN),
+    OpenDir(EN),
     /// Before content of current dir with content
-    BeforeContentWithContent(EN, C),
+    OpenDirWithContent(EN, C),
     /// An entry
     Entry(EN),
     /// An error
     Error(ER),
     /// After content of current dir
-    AfterContent,
+    CloseDir,
 }
 
 /// A position in dirs tree
 #[derive(Debug, PartialEq, Eq)]
 pub enum InnerPosition {
     /// Before content of current dir
-    BeforeContent,
+    OpenDir,
     /// An entry
     Entry,
     /// After content of current dir
-    AfterContent,
+    CloseDir,
 }
 
 
@@ -134,12 +134,12 @@ pub enum InnerPosition {
 #[derive(Debug, PartialEq, Eq)]
 pub enum InnerPositionWithData<EN, ER> {
     /// Before content of current dir
-    BeforeContent,
+    OpenDir,
     /// An entry
     Entry(EN),
     /// An error
     Error(ER),
     /// After content of current dir
-    AfterContent,
+    CloseDir,
 }
 

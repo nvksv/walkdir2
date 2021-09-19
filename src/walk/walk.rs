@@ -587,7 +587,7 @@ where
 
             match cur_state.get_current_position() {
                 // Before content
-                InnerPositionWithData::BeforeContent => {
+                InnerPositionWithData::OpenDir => {
                     // Before content of current dir
                     assert!(self.transition_state == TransitionState::None);
 
@@ -599,7 +599,7 @@ where
                         &mut self.opts.ctx,
                     );
 
-                    // At root we dont't yield Position::BeforeContent (BeforeContentWithContent)
+                    // At root we dont't yield Position::OpenDir (OpenDirWithContent)
                     if cur_depth == 0 {
                         continue;
                     }
@@ -615,11 +615,11 @@ where
                         );
                         let parent = get_parent_dent(self, cur_depth);
                         debug!(self.do_debug_checks());
-                        return Position::BeforeContentWithContent(parent, content).into_some();
+                        return Position::OpenDirWithContent(parent, content).into_some();
                     } else {
                         let parent = get_parent_dent(self, cur_depth);
                         debug!(self.do_debug_checks());
-                        return Position::BeforeContent(parent).into_some();
+                        return Position::OpenDir(parent).into_some();
                     }
                 },
                 // At entry
@@ -770,10 +770,10 @@ where
                     return Position::Error(err).into_some();
                 }
                 // After content of dir
-                InnerPositionWithData::AfterContent => {
+                InnerPositionWithData::CloseDir => {
                     // After content of current dir
 
-                    // For root: stop the iterator (without yielding Position::AfterContent)
+                    // For root: stop the iterator (without yielding Position::CloseDir)
                     if cur_depth == 0 {
                         return None;
                     }
@@ -781,10 +781,10 @@ where
                     match self.transition_state {
                         // First step
                         TransitionState::None => {
-                            // Just yield Position::AfterContent
+                            // Just yield Position::CloseDir
                             self.transition_state = TransitionState::BeforePopUp;
                             debug!(self.do_debug_checks());
-                            return Position::AfterContent.into_some();
+                            return Position::CloseDir.into_some();
                         }
                         // Second step: surface to parent
                         TransitionState::BeforePopUp => {
