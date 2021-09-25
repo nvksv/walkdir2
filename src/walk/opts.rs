@@ -36,7 +36,7 @@ pub struct WalkDirOptionsImmut
     /// Yield Position::OpenDir((dir, Same(ItemsCollection))) -- otherwise Position::OpenDir((dir, None)) will be yielded
     pub yield_open_dir_with_content: bool,
     /// Filter content yielded in Position::OpenDir (in Position::Entry(...))
-    pub before_content_filter: ContentFilter,
+    pub open_dir_with_content_filter: ContentFilter,
 }
 
 impl Default for WalkDirOptionsImmut {
@@ -52,7 +52,7 @@ impl Default for WalkDirOptionsImmut {
             content_filter: ContentFilter::None,
             content_order: ContentOrder::None,
             yield_open_dir_with_content: false,
-            before_content_filter: ContentFilter::None,
+            open_dir_with_content_filter: ContentFilter::None,
         }
     }
 }
@@ -134,7 +134,7 @@ where
                 "yield_open_dir_with_content",
                 &self.immut.yield_open_dir_with_content,
             )
-            .field("before_content_filter", &self.immut.before_content_filter)
+            .field("open_dir_with_content_filter", &self.immut.open_dir_with_content_filter)
             .field("sorter", &sorter_str)
             .field("content_processor", &self.content_processor)
             .field("ctx", &self.ctx)
@@ -489,8 +489,8 @@ where
         self
     }
     /// A variants for filtering content
-    pub fn before_content_filter(mut self, filter: ContentFilter) -> Self {
-        self.opts.immut.before_content_filter = filter;
+    pub fn open_dir_with_content_filter(mut self, filter: ContentFilter) -> Self {
+        self.opts.immut.open_dir_with_content_filter = filter;
         self
     }
 

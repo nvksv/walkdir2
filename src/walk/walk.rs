@@ -606,7 +606,7 @@ where
 
                     if self.opts.immut.yield_open_dir_with_content {
                         let content = cur_state.clone_all_content(
-                            self.opts.immut.before_content_filter,
+                            self.opts.immut.open_dir_with_content_filter,
                             &self.opts.immut,
                             &mut self.opts.content_processor,
                             &mut process_dent!(self, cur_state.depth()),
