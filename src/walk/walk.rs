@@ -604,7 +604,7 @@ where
                         continue;
                     }
 
-                    if self.opts.immut.yield_before_content_with_content {
+                    if self.opts.immut.yield_open_dir_with_content {
                         let content = cur_state.clone_all_content(
                             self.opts.immut.before_content_filter,
                             &self.opts.immut,
