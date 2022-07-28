@@ -12,9 +12,9 @@ use crate::error::{ErrorInner, Error};
 ////
 
 #[derive(Debug)]
-pub struct FlatDirEntry<E: fs::FsDirEntry> {
+pub struct FlatDirEntry<FS: fs::FsDirEntry> {
     /// Raw DirEntry
-    pub raw: RawDirEntry<E>,
+    pub raw: RawDirEntry<FS>,
     /// This entry is a dir and will be walked recursive.
     pub is_dir: bool,
     /// This entry is symlink to loop.
@@ -27,24 +27,24 @@ pub struct FlatDirEntry<E: fs::FsDirEntry> {
 //// DirEntryRecord
 
 #[derive(Debug)]
-pub(crate) struct DirEntryRecord<E: fs::FsDirEntry> {
+pub(crate) struct DirEntryRecord<FS: fs::FsDirEntry> {
     /// Value from ReadDir
-    flat: wd::ResultInner<FlatDirEntry<E>, E>,
+    flat: wd::ResultInner<FlatDirEntry<FS>, FS>,
     /// This entry must be yielded first according to opts.content_order
     first_pass: bool,
     /// This entry will not be yielded according to opts.content_filter
     hidden: bool,
 }
 
-impl<E: fs::FsDirEntry> DirEntryRecord<E> {
+impl<FS: fs::FsDirEntry> DirEntryRecord<FS> {
     fn new(
-        r_rawdent: wd::ResultInner<RawDirEntry<E>, E>,
+        r_rawdent: wd::ResultInner<RawDirEntry<FS>, FS>,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
-        ctx: &mut E::Context,
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
+        ctx: &mut FS::Context,
     ) -> Option<Self> {
         let r_flat_dent = match r_rawdent {
             Ok(raw_dent) => match process_rawdent(raw_dent, ctx) {
@@ -94,31 +94,31 @@ impl<E: fs::FsDirEntry> DirEntryRecord<E> {
 //// DirState
 
 #[derive(Debug)]
-pub struct DirContent<E, CP>
+pub struct DirContent<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     /// Source of not consumed DirEntries
-    rd: ReadDir<E>,
+    rd: ReadDir<FS>,
     /// A list of already consumed DirEntries
-    content: Vec<DirEntryRecord<E>>,
+    content: Vec<DirEntryRecord<FS>>,
     /// Count of consumed entries = position of unconsumed in content
     current_pos: Option<usize>,
     _cp: std::marker::PhantomData<CP>,
 }
 
-impl<E, CP> DirContent<E, CP>
+impl<FS, CP> DirContent<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     /// New DirContent from alone DirEntry
     pub fn new_once(
-        raw: RawDirEntry<E>,
-    ) -> wd::ResultInner<Self, E> {
+        raw: RawDirEntry<FS>,
+    ) -> wd::ResultInner<Self, FS> {
         Self {
-            rd: ReadDir::<E>::new_once(raw)?,
+            rd: ReadDir::<FS>::new_once(raw)?,
             content: vec![],
             current_pos: None,
             _cp: std::marker::PhantomData,
@@ -128,10 +128,10 @@ where
 
     /// New DirContent from FsReadDir
     pub fn new(
-        parent: &RawDirEntry<E>, 
+        parent: &RawDirEntry<FS>, 
         opened_count: &mut Depth,
-        ctx: &mut E::Context
-    ) -> wd::ResultInner<Self, E> {
+        ctx: &mut FS::Context
+    ) -> wd::ResultInner<Self, FS> {
         Self {
             rd: parent.read_dir(opened_count, ctx)?,
             content: vec![],
@@ -155,11 +155,11 @@ where
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> bool {
         let was_open = self.rd.is_open();
 
@@ -178,15 +178,15 @@ where
     /// Makes new DirEntryRecord from processed Result<DirEntry> or rejects it.
     /// Doesn't change position.
     fn new_rec(
-        r_rawdent: wd::ResultInner<RawDirEntry<E>, E>,
+        r_rawdent: wd::ResultInner<RawDirEntry<FS>, FS>,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
-        ctx: &mut E::Context,
-    ) -> Option<DirEntryRecord<E>> {
-        let rec = DirEntryRecord::<E>::new(r_rawdent, opts_immut, process_rawdent, ctx)?;
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
+        ctx: &mut FS::Context,
+    ) -> Option<DirEntryRecord<FS>> {
+        let rec = DirEntryRecord::<FS>::new(r_rawdent, opts_immut, process_rawdent, ctx)?;
 
         // if let Ok(ref mut dent) = rec.dent {
         //     dent.set_depth_mut( depth );
@@ -201,11 +201,11 @@ where
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> Option<(bool, bool)> {
         loop {
             // Check for already loaded entry
@@ -245,13 +245,13 @@ where
     pub fn get_current_rec(
         &mut self,
         depth: Depth,
-    ) -> std::result::Result<FlatDirEntryRef<'_, E, CP>, ErrorInnerRef<'_, E>> {
+    ) -> std::result::Result<FlatDirEntryRef<'_, FS, CP>, ErrorInnerRef<'_, FS>> {
         let pos = self.current_pos.unwrap();
         let rec = self.content.get_mut(pos).unwrap();
 
         match rec.flat {
-            Ok(ref mut flat) => Ok(FlatDirEntryRef::<E, CP>::new(flat, depth, rec.hidden)),
-            Err(ref mut err) => Err(ErrorInnerRef::<E>::new(err, depth)),
+            Ok(ref mut flat) => Ok(FlatDirEntryRef::<FS, CP>::new(flat, depth, rec.hidden)),
+            Err(ref mut err) => Err(ErrorInnerRef::<FS>::new(err, depth)),
         }
     }
 
@@ -259,8 +259,8 @@ where
     /// Changes current position.
     fn sort_content_and_rewind(
         &mut self, 
-        cmp: &mut FnCmp<E>, 
-        ctx: &mut E::Context,
+        cmp: &mut FnCmp<FS>, 
+        ctx: &mut FS::Context,
     ) {
         self.content.sort_by(|a, b| match (&a.flat, &b.flat) {
             (&Ok(ref a), &Ok(ref b)) => RawDirEntry::call_cmp(&a.raw, &b.raw, cmp, ctx),
@@ -276,19 +276,19 @@ where
     pub fn load_all_and_sort(
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
-        cmp: &mut FnCmp<E>,
+        cmp: &mut FnCmp<FS>,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) {
         self.load_all(opts_immut, process_rawdent, opened_count, ctx);
         self.sort_content_and_rewind(cmp, ctx);
     }
 
-    // pub fn iter_content<'s, F, T: 's>(&'s self, f: F) -> impl Iterator<Item = &'s T> where F: FnMut(&DirEntryRecord<E>) -> Option<&T> {
+    // pub fn iter_content<'s, F, T: 's>(&'s self, f: F) -> impl Iterator<Item = &'s T> where F: FnMut(&DirEntryRecord<FS>) -> Option<&T> {
     //     self.content.iter().filter_map( f )
     // }
 
@@ -297,11 +297,11 @@ where
         f: F
     ) -> impl Iterator<Item = &'s mut T>
     where
-        F: FnMut(&mut FlatDirEntry<E>) -> Option<&mut T>,
+        F: FnMut(&mut FlatDirEntry<FS>) -> Option<&mut T>,
     {
         self.content
             .iter_mut()
-            .filter_map(|rec: &mut DirEntryRecord<E>| rec.flat.as_mut().ok())
+            .filter_map(|rec: &mut DirEntryRecord<FS>| rec.flat.as_mut().ok())
             .filter_map(f)
     }
 }
@@ -309,31 +309,31 @@ where
 /////////////////////////////////////////////////////////////////////////
 //// DirEntryRecordRef
 
-pub struct FlatDirEntryRef<'r, E, CP>
+pub struct FlatDirEntryRef<'r, FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
-    flat: &'r mut FlatDirEntry<E>,
+    flat: &'r mut FlatDirEntry<FS>,
     depth: Depth,
     /// This entry will not be yielded according to opts.content_filter
     hidden: bool,
     _cp: std::marker::PhantomData<CP>,
 }
 
-impl<'r, E, CP> FlatDirEntryRef<'r, E, CP>
+impl<'r, FS, CP> FlatDirEntryRef<'r, FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
-    fn new(flat: &'r mut FlatDirEntry<E>, depth: Depth, hidden: bool) -> Self {
+    fn new(flat: &'r mut FlatDirEntry<FS>, depth: Depth, hidden: bool) -> Self {
         Self { flat, depth, hidden, _cp: std::marker::PhantomData }
     }
 
     pub fn make_content_item (
         &mut self,
         content_processor: &CP,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> Option<CP::Item> {
         self.flat.raw.make_content_item( content_processor, self.flat.is_dir, self.depth, ctx )
     }
@@ -345,7 +345,7 @@ where
         self.flat.raw.allow_push( content_processor )
     }
 
-    pub fn as_flat(&self) -> &FlatDirEntry<E> {
+    pub fn as_flat(&self) -> &FlatDirEntry<FS> {
         self.flat
     }
 
@@ -361,7 +361,7 @@ where
         self.flat.loop_link
     }
 
-    pub fn path(&self) -> &E::Path {
+    pub fn path(&self) -> &FS::Path {
         self.flat.raw.path()
     }
 }
@@ -369,18 +369,18 @@ where
 /////////////////////////////////////////////////////////////////////////
 //// ErrorInnerRef
 
-pub struct ErrorInnerRef<'r, E: fs::FsDirEntry> {
-    err: &'r mut ErrorInner<E>,
+pub struct ErrorInnerRef<'r, FS: fs::FsDirEntry> {
+    err: &'r mut ErrorInner<FS>,
     depth: Depth,
 }
 
-impl<'r, E: fs::FsDirEntry> ErrorInnerRef<'r, E> {
-    fn new(err: &'r mut ErrorInner<E>, depth: Depth) -> Self {
+impl<'r, FS: fs::FsDirEntry> ErrorInnerRef<'r, FS> {
+    fn new(err: &'r mut ErrorInner<FS>, depth: Depth) -> Self {
         Self { err, depth }
     }
 
-    pub fn into_error(self) -> Error<E> {
-        Error::<E>::from_inner(self.err.take(), self.depth)
+    pub fn into_error(self) -> Error<FS> {
+        Error::<FS>::from_inner(self.err.take(), self.depth)
     }
 }
 
@@ -403,15 +403,15 @@ fn get_initial_pass(opts_immut: &WalkDirOptionsImmut) -> DirPass {
 }
 
 #[derive(Debug)]
-pub struct DirState<E, CP>
+pub struct DirState<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     /// The depth of this dir
     depth: Depth,
     /// Content of this dir
-    content: DirContent<E, CP>,
+    content: DirContent<FS, CP>,
     /// Current pass
     pass: DirPass,
     /// Current position
@@ -421,21 +421,21 @@ where
     _cp: std::marker::PhantomData<CP>,
 }
 
-impl<E, CP> DirState<E, CP>
+impl<FS, CP> DirState<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     fn init(
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
-        sorter: &mut Option<FnCmp<E>>,
+        sorter: &mut Option<FnCmp<FS>>,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) {
         if let Some(cmp) = sorter {
             self.content.load_all_and_sort(opts_immut, cmp, process_rawdent, opened_count, ctx);
@@ -444,20 +444,20 @@ where
 
     /// New DirState from alone DirEntry
     pub fn new_once(
-        raw: RawDirEntry<E>,
+        raw: RawDirEntry<FS>,
         depth: Depth,
         opts_immut: &WalkDirOptionsImmut,
-        sorter: &mut Option<FnCmp<E>>,
+        sorter: &mut Option<FnCmp<FS>>,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<Self, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<Self, FS> {
         let mut this = Self {
             depth,
-            content: DirContent::<E, CP>::new_once(raw)?,
+            content: DirContent::<FS, CP>::new_once(raw)?,
             pass: get_initial_pass(opts_immut),
             position: InnerPosition::OpenDir,
             _cp: std::marker::PhantomData,
@@ -468,20 +468,20 @@ where
 
     /// New DirState from FsReadDir
     pub fn new(
-        parent: &RawDirEntry<E>,
+        parent: &RawDirEntry<FS>,
         depth: Depth,
         opts_immut: &WalkDirOptionsImmut,
-        sorter: &mut Option<FnCmp<E>>,
+        sorter: &mut Option<FnCmp<FS>>,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<Self, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<Self, FS> {
         let mut this = Self {
             depth,
-            content: DirContent::<E, CP>::new(parent, opened_count, ctx)?,
+            content: DirContent::<FS, CP>::new(parent, opened_count, ctx)?,
             pass: get_initial_pass(opts_immut),
             position: InnerPosition::OpenDir,
             _cp: std::marker::PhantomData,
@@ -504,11 +504,11 @@ where
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> bool {
         self.content.load_all(opts_immut, process_rawdent, opened_count, ctx)
     }
@@ -519,11 +519,11 @@ where
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> bool {
         loop {
             if let Some((first_pass, can_be_yielded)) =
@@ -562,11 +562,11 @@ where
         &mut self,
         opts_immut: &WalkDirOptionsImmut,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) {
         if self.position == InnerPosition::CloseDir {
             return;
@@ -584,7 +584,7 @@ where
     /// Doesn't change position.
     pub fn get_current_position(
         &mut self,
-    ) -> InnerPositionWithData<FlatDirEntryRef<'_, E, CP>, ErrorInnerRef<'_, E>> {
+    ) -> InnerPositionWithData<FlatDirEntryRef<'_, FS, CP>, ErrorInnerRef<'_, FS>> {
         match self.position {
             InnerPosition::OpenDir => InnerPositionWithData::OpenDir,
             InnerPosition::Entry => {
@@ -606,11 +606,11 @@ where
         opts_immut: &WalkDirOptionsImmut,
         content_processor: &CP,
         process_rawdent: &mut impl (FnMut(
-            RawDirEntry<E>,
-            &mut E::Context,
-        ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>>),
+            RawDirEntry<FS>,
+            &mut FS::Context,
+        ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> CP::Collection {
         self.content.load_all(opts_immut, process_rawdent, opened_count, ctx);
 

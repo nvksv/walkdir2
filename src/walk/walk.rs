@@ -44,7 +44,7 @@ macro_rules! process_dent {
     };
     ($opts_immut:expr, $root_device:expr, $ancestors:expr, $depth:expr) => {
         (|opts_immut, root_device, ancestors, depth| {
-            move |raw_dent: RawDirEntry<E>, ctx: &mut E::Context| {
+            move |raw_dent: RawDirEntry<FS>, ctx: &mut FS::Context| {
                 Self::process_rawdent(raw_dent, depth, opts_immut, root_device, ancestors, ctx)
             }
         })($opts_immut, $root_device, $ancestors, $depth)
@@ -52,10 +52,10 @@ macro_rules! process_dent {
 }
 
 /// Type of item for Iterators
-pub type WalkDirIteratorItem<E, CP> = Position<
-    <CP as ContentProcessor<E>>::Item,
-    <CP as ContentProcessor<E>>::Collection,
-    Error<E>,
+pub type WalkDirIteratorItem<FS, CP> = Position<
+    <CP as ContentProcessor<FS>>::Item,
+    <CP as ContentProcessor<FS>>::Collection,
+    Error<FS>,
 >;
 
 /////////////////////////////////////////////////////////////////////////
@@ -64,19 +64,19 @@ pub type WalkDirIteratorItem<E, CP> = Position<
 /// An ancestor is an item in the directory tree traversed by walkdir, and is
 /// used to check for loops in the tree when traversing symlinks.
 #[derive(Debug)]
-struct Ancestor<E: fs::FsDirEntry> {
+struct Ancestor<FS: fs::FsDirEntry> {
     /// The path of this ancestor.
-    path: E::PathBuf,
+    path: FS::PathBuf,
     /// Fingerprint
-    fingerprint: E::DirFingerprint,
+    fingerprint: FS::DirFingerprint,
 }
 
-impl<E: fs::FsDirEntry> Ancestor<E> {
+impl<FS: fs::FsDirEntry> Ancestor<FS> {
     /// Create a new ancestor from the given directory path.
     pub fn new(
-        raw: &RawDirEntry<E>,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<Self, E> {
+        raw: &RawDirEntry<FS>,
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<Self, FS> {
         Self { 
             path: raw.pathbuf(), 
             fingerprint: raw.fingerprint(ctx)? 
@@ -86,7 +86,7 @@ impl<E: fs::FsDirEntry> Ancestor<E> {
     /// Returns true if and only if the given open file handle corresponds to
     /// the same directory as this ancestor.
     fn is_same(&self, rhs: &Self) -> bool {
-        E::is_same( (&self.path, &self.fingerprint), (&rhs.path, &rhs.fingerprint))
+        FS::is_same( (&self.path, &self.fingerprint), (&rhs.path, &rhs.fingerprint))
     }
 }
 
@@ -114,24 +114,24 @@ enum TransitionState {
 /// [`WalkDir`]: struct.WalkDir.html
 /// [`.into_iter()`]: struct.WalkDir.html#into_iter.v
 #[derive(Debug)]
-pub struct WalkDirIterator<E, CP>
+pub struct WalkDirIterator<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     /// Options specified in the builder. Depths, max fds, etc.
-    opts: WalkDirOptions<E, CP>,
+    opts: WalkDirOptions<FS, CP>,
     /// The start path.
     ///
     /// This is only `Some(...)` at the beginning. After the first iteration,
     /// this is always `None`.
-    root: Option<E::PathBuf>,
+    root: Option<FS::PathBuf>,
     /// A stack of open (up to max fd) or closed handles to directories.
     /// An open handle is a plain [`fs::ReadDir`] while a closed handle is
     /// a `Vec<fs::DirEntry>` corresponding to the as-of-yet consumed entries.
     ///
     /// [`fs::ReadDir`]: https://doc.rust-lang.org/stable/std/fs/struct.ReadDir.html
-    states: Vec<DirState<E, CP>>,
+    states: Vec<DirState<FS, CP>>,
     /// before push down / after pop up
     transition_state: TransitionState,
     /// A stack of file paths.
@@ -140,7 +140,7 @@ where
     /// cases this stack is empty.
     ///
     /// [`follow_links`]: struct.WalkDir.html#method.follow_links
-    ancestors: Vec<Ancestor<E>>,
+    ancestors: Vec<Ancestor<FS>>,
     /// Count of opened dirs.
     opened_count: Depth,
     /// The current depth of iteration (the length of the stack at the
@@ -152,18 +152,18 @@ where
     /// If the `same_file_system` option isn't enabled, then this is always
     /// `None`. Conversely, if it is enabled, this is always `Some(...)` after
     /// handling the root path.
-    root_device: Option<E::DeviceNum>,
+    root_device: Option<FS::DeviceNum>,
 }
 
-type PushDirData<E, CP> = (DirState<E, CP>, Option<Ancestor<E>>);
+type PushDirData<FS, CP> = (DirState<FS, CP>, Option<Ancestor<FS>>);
 
-impl<E, CP> WalkDirIterator<E, CP>
+impl<FS, CP> WalkDirIterator<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     /// Make new
-    pub fn new(opts: WalkDirOptions<E, CP>, root: E::PathBuf) -> Self {
+    pub fn new(opts: WalkDirOptions<FS, CP>, root: FS::PathBuf) -> Self {
         Self {
             opts,
             root: Some(root),
@@ -196,13 +196,13 @@ where
     // - Some(Err(_)) -- some error occured
     // - None -- entry must be ignored
     fn process_rawdent(
-        rawdent: RawDirEntry<E>,
+        rawdent: RawDirEntry<FS>,
         depth: Depth,
         opts_immut: &WalkDirOptionsImmut,
-        root_device_opt: &Option<E::DeviceNum>,
-        ancestors: &Vec<Ancestor<E>>,
-        ctx: &mut E::Context,
-    ) -> Option<wd::ResultInner<FlatDirEntry<E>, E>> {
+        root_device_opt: &Option<FS::DeviceNum>,
+        ancestors: &Vec<Ancestor<FS>>,
+        ctx: &mut FS::Context,
+    ) -> Option<wd::ResultInner<FlatDirEntry<FS>, FS>> {
         let (rawdent, loop_link) =
             if rawdent.is_symlink() && opts_immut.follow_links {
                 let (rawdent, loop_link) = match Self::follow(rawdent, ancestors, ctx) {
@@ -248,9 +248,9 @@ where
 
     fn init(
         &mut self, 
-        root_path: &E::Path, 
-    ) -> wd::ResultInner<(), E> {
-        let root = RawDirEntry::<E>::from_path( root_path, &mut self.opts.ctx )?;
+        root_path: &FS::Path, 
+    ) -> wd::ResultInner<(), FS> {
+        let root = RawDirEntry::<FS>::from_path( root_path, &mut self.opts.ctx )?;
 
         if self.opts.immut.same_file_system {
             self.root_device = Some(root.device_num(&mut self.opts.ctx)?);
@@ -263,10 +263,10 @@ where
 
     fn push_root(
         &mut self, 
-        root: RawDirEntry<E>, 
+        root: RawDirEntry<FS>, 
         depth: Depth
-    ) -> wd::ResultInner<(), E> {
-        let state = DirState::<E, CP>::new_once(
+    ) -> wd::ResultInner<(), FS> {
+        let state = DirState::<FS, CP>::new_once(
             root,
             depth,
             &self.opts.immut,
@@ -311,22 +311,22 @@ where
     }
 
     fn push_dir_1(
-        flat: &FlatDirEntry<E>,
+        flat: &FlatDirEntry<FS>,
         new_depth: Depth,
         opts_immut: &WalkDirOptionsImmut,
-        sorter: &mut Option<FnCmp<E>>,
-        root_device: &Option<E::DeviceNum>,
-        ancestors: &Vec<Ancestor<E>>,
+        sorter: &mut Option<FnCmp<FS>>,
+        root_device: &Option<FS::DeviceNum>,
+        ancestors: &Vec<Ancestor<FS>>,
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<PushDirData<E, CP>, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<PushDirData<FS, CP>, FS> {
         // This is safe as we makes any changes strictly AFTER using dent_ptr.
-        // Neither E::read_dir nor Ancestor::new
+        // Neither FS::read_dir nor Ancestor::new
 
         assert!(flat.loop_link.is_none());
 
         // Open a handle to reading the directory's entries.
-        let state = DirState::<E, CP>::new(
+        let state = DirState::<FS, CP>::new(
             &flat.raw,
             new_depth,
             opts_immut,
@@ -363,7 +363,7 @@ where
         Ok((state, ancestor))
     }
 
-    fn push_dir_2(&mut self, data: PushDirData<E, CP>) {
+    fn push_dir_2(&mut self, data: PushDirData<FS, CP>) {
         let (state, ancestor_opt) = data;
 
         if let Some(ancestor) = ancestor_opt {
@@ -440,10 +440,10 @@ where
     }
 
     fn follow(
-        raw: RawDirEntry<E>,
-        ancestors: &Vec<Ancestor<E>>,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<(RawDirEntry<E>, Option<Depth>), E> {
+        raw: RawDirEntry<FS>,
+        ancestors: &Vec<Ancestor<FS>>,
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<(RawDirEntry<FS>, Option<Depth>), FS> {
         let dent = raw.follow(ctx)?;
 
         let loop_link = if dent.is_dir() && !ancestors.is_empty() {
@@ -456,11 +456,11 @@ where
     }
 
     fn check_loop(
-        raw: &RawDirEntry<E>,
-        ancestors: &Vec<Ancestor<E>>,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<Option<Depth>, E> {
-        let raw_as_ancestor = Ancestor::<E>::new( raw, ctx )?;
+        raw: &RawDirEntry<FS>,
+        ancestors: &Vec<Ancestor<FS>>,
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<Option<Depth>, FS> {
+        let raw_as_ancestor = Ancestor::<FS>::new( raw, ctx )?;
 
         for (index, ancestor) in ancestors.iter().enumerate().rev() {
             if ancestor.is_same(&raw_as_ancestor) {
@@ -472,20 +472,20 @@ where
     }
 
     fn make_loop_error(
-        ancestors: &Vec<Ancestor<E>>,
+        ancestors: &Vec<Ancestor<FS>>,
         depth: Depth,
-        child: &E::Path,
-    ) -> ErrorInner<E> {
+        child: &FS::Path,
+    ) -> ErrorInner<FS> {
         let ancestor = ancestors.get(depth).unwrap();
 
-        ErrorInner::<E>::from_loop(&ancestor.path, child)
+        ErrorInner::<FS>::from_loop(&ancestor.path, child)
     }
 
     fn is_same_file_system(
-        root_device: &E::DeviceNum,
-        dent: &RawDirEntry<E>,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<bool, E> {
+        root_device: &FS::DeviceNum,
+        dent: &RawDirEntry<FS>,
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<bool, FS> {
         Ok(*root_device == dent.device_num(ctx)?)
     }
 
@@ -534,12 +534,12 @@ macro_rules! yield_rflat {
     }};
 }
 
-impl<E, CP> Iterator for WalkDirIterator<E, CP>
+impl<FS, CP> Iterator for WalkDirIterator<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
-    type Item = WalkDirIteratorItem<E, CP>;
+    type Item = WalkDirIteratorItem<FS, CP>;
     /// Advances the iterator and returns the next value.
     ///
     /// # Errors
@@ -547,10 +547,10 @@ where
     /// If the iterator fails to retrieve the next value, this method returns
     /// an error value. The error will be wrapped in an Option::Some.
     fn next(&mut self) -> Option<Self::Item> {
-        fn get_parent_dent<E, CP>(this: &mut WalkDirIterator<E, CP>, cur_depth: Depth) -> CP::Item
+        fn get_parent_dent<FS, CP>(this: &mut WalkDirIterator<FS, CP>, cur_depth: Depth) -> CP::Item
         where
-            E: fs::FsDirEntry,
-            CP: ContentProcessor<E>,
+            FS: fs::FsDirEntry,
+            CP: ContentProcessor<FS>,
         {
             let prev_state = this.states.get_mut(cur_depth - 1).unwrap();
             match prev_state.get_current_position() {

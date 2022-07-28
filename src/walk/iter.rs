@@ -8,10 +8,10 @@ use crate::wd::{Position};
 //// WalkDirIter
 
 /// WalkDirIter
-pub trait WalkDirIter<E, CP>: Sized + Iterator<Item = WalkDirIteratorItem<E, CP>>
+pub trait WalkDirIter<FS, CP>: Sized + Iterator<Item = WalkDirIteratorItem<FS, CP>>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     /// Yields only entries which satisfy the given predicate and skips
     /// descending into directories that do not satisfy the given predicate.
@@ -59,7 +59,7 @@ where
     /// [`skip_current_dir`]: #method.skip_current_dir
     /// [`min_depth`]: struct.WalkDir.html#method.min_depth
     /// [`max_depth`]: struct.WalkDir.html#method.max_depth
-    fn filter_entry<P>(self, predicate: P) -> FilterEntry<E, CP, Self, P>
+    fn filter_entry<P>(self, predicate: P) -> FilterEntry<FS, CP, Self, P>
     where
         P: FnMut(&CP::Item) -> bool,
     {
@@ -70,18 +70,18 @@ where
     fn skip_current_dir(&mut self);
 
     /// WalkDirIter
-    fn into_classic(self) -> ClassicIter<E, CP, Self> {
-        ClassicIter::<E, CP, Self>::new(self)
+    fn into_classic(self) -> ClassicIter<FS, CP, Self> {
+        ClassicIter::<FS, CP, Self>::new(self)
     }
 }
 
-impl<E, CP> WalkDirIter<E, CP> for WalkDirIterator<E, CP>
+impl<FS, CP> WalkDirIter<FS, CP> for WalkDirIterator<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
 {
     fn skip_current_dir(&mut self) {
-        WalkDirIterator::<E, CP>::skip_current_dir(self);
+        WalkDirIterator::<FS, CP>::skip_current_dir(self);
     }
 }
 
@@ -110,11 +110,11 @@ where
 /// [`min_depth`]: struct.WalkDir.html#method.min_depth
 /// [`max_depth`]: struct.WalkDir.html#method.max_depth
 #[derive(Debug)]
-pub struct FilterEntry<E, CP, I, P>
+pub struct FilterEntry<FS, CP, I, P>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
-    I: Iterator<Item = WalkDirIteratorItem<E, CP>> + WalkDirIter<E, CP>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
+    I: Iterator<Item = WalkDirIteratorItem<FS, CP>> + WalkDirIter<FS, CP>,
     P: FnMut(&CP::Item) -> bool,
 {
     inner: I,
@@ -122,14 +122,14 @@ where
     _cp: std::marker::PhantomData<CP>,
 }
 
-impl<E, CP, I, P> Iterator for FilterEntry<E, CP, I, P>
+impl<FS, CP, I, P> Iterator for FilterEntry<FS, CP, I, P>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
-    I: Iterator<Item = WalkDirIteratorItem<E, CP>> + WalkDirIter<E, CP>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
+    I: Iterator<Item = WalkDirIteratorItem<FS, CP>> + WalkDirIter<FS, CP>,
     P: FnMut(&CP::Item) -> bool,
 {
-    type Item = WalkDirIteratorItem<E, CP>;
+    type Item = WalkDirIteratorItem<FS, CP>;
 
     /// Advances the iterator and returns the next value.
     ///
@@ -158,11 +158,11 @@ where
     }
 }
 
-impl<E, CP, I, P> FilterEntry<E, CP, I, P>
+impl<FS, CP, I, P> FilterEntry<FS, CP, I, P>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
-    I: Iterator<Item = WalkDirIteratorItem<E, CP>> + WalkDirIter<E, CP>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
+    I: Iterator<Item = WalkDirIteratorItem<FS, CP>> + WalkDirIter<FS, CP>,
     P: FnMut(&CP::Item) -> bool,
 {
     /// Yields only entries which satisfy the given predicate and skips
@@ -211,7 +211,7 @@ where
     /// [`skip_current_dir`]: #method.skip_current_dir
     /// [`min_depth`]: struct.WalkDir.html#method.min_depth
     /// [`max_depth`]: struct.WalkDir.html#method.max_depth
-    pub fn filter_entry(self, predicate: P) -> FilterEntry<E, CP, Self, P> {
+    pub fn filter_entry(self, predicate: P) -> FilterEntry<FS, CP, Self, P> {
         FilterEntry { inner: self, predicate, _cp: std::marker::PhantomData }
     }
 
@@ -263,11 +263,11 @@ where
     }
 }
 
-impl<E, CP, I, P> WalkDirIter<E, CP> for FilterEntry<E, CP, I, P>
+impl<FS, CP, I, P> WalkDirIter<FS, CP> for FilterEntry<FS, CP, I, P>
 where
-    E: fs::FsDirEntry,
-    CP: ContentProcessor<E>,
-    I: Iterator<Item = WalkDirIteratorItem<E, CP>> + WalkDirIter<E, CP>,
+    FS: fs::FsDirEntry,
+    CP: ContentProcessor<FS>,
+    I: Iterator<Item = WalkDirIteratorItem<FS, CP>> + WalkDirIter<FS, CP>,
     P: FnMut(&CP::Item) -> bool,
 {
     fn skip_current_dir(&mut self) {

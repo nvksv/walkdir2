@@ -220,19 +220,19 @@ where
 /// Note that when following symbolic/soft links, loops are detected and an
 /// error is reported.
 #[derive(Debug)]
-pub struct WalkDirBuilder<E = fs::DefaultDirEntry, CP = cp::DirEntryContentProcessor>
+pub struct WalkDirBuilder<FS = fs::DefaultDirEntry, CP = cp::DirEntryContentProcessor>
 where
-    E: fs::FsDirEntry,
-    CP: cp::ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: cp::ContentProcessor<FS>,
 {
-    opts: WalkDirOptions<E, CP>,
-    root: E::PathBuf,
+    opts: WalkDirOptions<FS, CP>,
+    root: FS::PathBuf,
 }
 
-impl<E, CP> WalkDirBuilder<E, CP>
+impl<FS, CP> WalkDirBuilder<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: cp::ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: cp::ContentProcessor<FS>,
 {
     /// Create a builder for a recursive directory iterator starting at the
     /// file path `root`. If `root` is a directory, then it is the first item
@@ -241,21 +241,21 @@ where
     /// is always followed for the purposes of directory traversal. (A root
     /// `DirEntry` still obeys its documentation with respect to symlinks and
     /// the `follow_links` setting.)
-    pub fn new<P: AsRef<E::Path>>(
+    pub fn new<P: AsRef<FS::Path>>(
         root: P
     ) -> Self 
-    where WalkDirOptions<E, CP>: Default 
+    where WalkDirOptions<FS, CP>: Default 
     {
         Self {
-            opts: WalkDirOptions::<E, CP>::default(),
+            opts: WalkDirOptions::<FS, CP>::default(),
             root: root.as_ref().to_path_buf(),
         }
     }
 
     /// Create a builder with context
-    pub fn with_context<P: AsRef<E::Path>>(
+    pub fn with_context<P: AsRef<FS::Path>>(
         root: P, 
-        ctx: E::Context,
+        ctx: FS::Context,
         content_processor: CP,
     ) -> Self {
         Self {
@@ -265,12 +265,12 @@ where
     }
 
     /// Builds an iterator
-    pub fn build(self) -> WalkDirIterator<E, CP> {
-        WalkDirIterator::<E, CP>::new(self.opts, self.root)
+    pub fn build(self) -> WalkDirIterator<FS, CP> {
+        WalkDirIterator::<FS, CP>::new(self.opts, self.root)
     }
 
     /// Into classic iterator
-    pub fn into_classic(self) -> ClassicIter<E, CP, WalkDirIterator<E, CP>> {
+    pub fn into_classic(self) -> ClassicIter<FS, CP, WalkDirIterator<FS, CP>> {
         self.into_iter().into_classic()
     }
 
@@ -394,7 +394,7 @@ where
     /// ```
     pub fn sort_by<F>(mut self, cmp: F) -> Self
     where
-        F: FnMut((&E, &E::FileType), (&E, &E::FileType), &mut E::Context) -> std::cmp::Ordering + Send + Sync + 'static,
+        F: FnMut((&FS, &FS::FileType), (&FS, &FS::FileType), &mut FS::Context) -> std::cmp::Ordering + Send + Sync + 'static,
     {
         self.opts.sorter = Some(Box::new(cmp));
         self
@@ -499,13 +499,13 @@ where
 /////////////////////////////////////////////////////////////////////////
 //// IntoIterator
 
-impl<E, CP> IntoIterator for WalkDirBuilder<E, CP>
+impl<FS, CP> IntoIterator for WalkDirBuilder<FS, CP>
 where
-    E: fs::FsDirEntry,
-    CP: cp::ContentProcessor<E>,
+    FS: fs::FsDirEntry,
+    CP: cp::ContentProcessor<FS>,
 {
-    type Item = WalkDirIteratorItem<E, CP>;
-    type IntoIter = WalkDirIterator<E, CP>;
+    type Item = WalkDirIteratorItem<FS, CP>;
+    type IntoIter = WalkDirIterator<FS, CP>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.build()

@@ -4,12 +4,12 @@ use crate::wd::{self, FnCmp, IntoOk, IntoSome, IntoErr, Depth};
 use crate::cp::ContentProcessor;
 
 #[derive(Debug)]
-enum RawDirEntryKind<E: fs::FsDirEntry> {
+enum RawDirEntryKind<FS: fs::FsDirEntry> {
     Root { 
-        fsdent: <E as fs::FsDirEntry>::RootDirEntry, 
+        fsdent: <FS as fs::FsDirEntry>::RootDirEntry, 
     },
     DirEntry { 
-        fsdent: E 
+        fsdent: FS 
     },
 }
 
@@ -40,29 +40,29 @@ enum RawDirEntryKind<E: fs::FsDirEntry> {
 /// [`follow_links`]: struct.WalkDir.html#method.follow_links
 /// [`DirEntryExt`]: trait.DirEntryExt.html
 #[derive(Debug)]
-pub struct RawDirEntry<E: fs::FsDirEntry> {
+pub struct RawDirEntry<FS: fs::FsDirEntry> {
     /// Kind of this entry
-    kind: RawDirEntryKind<E>,
+    kind: RawDirEntryKind<FS>,
     /// Is set when this entry was created from a symbolic link and the user
     /// expects to follow symbolic links.
     follow_link: bool,
     /// Cached file_type()
-    ty: E::FileType,
+    ty: FS::FileType,
 }
 
-impl<E: fs::FsDirEntry> RawDirEntry<E> {
+impl<FS: fs::FsDirEntry> RawDirEntry<FS> {
 
     /// Create new object from path (with root dir entry)
     pub fn from_path(
-        path: &E::Path,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<Self, E> {
-        let fsdent = E::RootDirEntry::from_path( path, ctx )
+        path: &FS::Path,
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<Self, FS> {
+        let fsdent = FS::RootDirEntry::from_path( path, ctx )
             .map_err(|err| into_path_err(path, err))?;
         let ty = fsdent.file_type(false, ctx)
             .map_err(|err| into_path_err(path, err))?;
         Self {
-            kind: RawDirEntryKind::<E>::Root{ fsdent },
+            kind: RawDirEntryKind::<FS>::Root{ fsdent },
             follow_link: false,
             ty,
         }.into_ok()
@@ -70,20 +70,20 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
 
     /// Create new object from fs entry
     pub fn from_fsdent(
-        fsdent: E,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<Self, E> {
+        fsdent: FS,
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<Self, FS> {
         let ty = fsdent.file_type(false, ctx)
             .map_err(into_io_err)?;
         Self {
-            kind: RawDirEntryKind::<E>::DirEntry{ fsdent },
+            kind: RawDirEntryKind::<FS>::DirEntry{ fsdent },
             follow_link: false,
             ty,
         }.into_ok()
     }
 
     /// Follow symlink and makes new object
-    pub fn follow(self, ctx: &mut E::Context) -> wd::ResultInner<Self, E> {
+    pub fn follow(self, ctx: &mut FS::Context) -> wd::ResultInner<Self, FS> {
         let ty = self.file_type_follow(ctx)?;
         Self {
             kind:           self.kind,
@@ -107,7 +107,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// [`WalkDir::new`]: struct.WalkDir.html#method.new
     /// [`path_is_symlink`]: struct.DirEntry.html#method.path_is_symlink
     /// [`std::fs::read_link`]: https://doc.rust-lang.org/stable/std/fs/fn.read_link.html
-    pub fn path(&self) -> &E::Path {
+    pub fn path(&self) -> &FS::Path {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. }        => fsdent.path(),
             RawDirEntryKind::DirEntry { fsdent, .. }    => fsdent.path(),
@@ -119,7 +119,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// Analogous to [`path`], but moves ownership of the path.
     ///
     /// [`path`]: struct.DirEntry.html#method.path
-    pub fn pathbuf(&self) -> E::PathBuf {
+    pub fn pathbuf(&self) -> FS::PathBuf {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. }        => fsdent.pathbuf(),
             RawDirEntryKind::DirEntry { fsdent, .. }    => fsdent.pathbuf(),
@@ -150,8 +150,8 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// [`std::fs::symlink_metadata`]: https://doc.rust-lang.org/stable/std/fs/fn.symlink_metadata.html
     pub fn metadata(
         &self, 
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<E::Metadata, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<FS::Metadata, FS> {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.metadata( self.follow_link, ctx )
@@ -165,8 +165,8 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// Return the type at the target of symlink.
     pub fn file_type_follow(
         &self,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<E::FileType, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<FS::FileType, FS> {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.file_type( true, ctx )
@@ -187,7 +187,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// [`follow_links`]: struct.WalkDir.html#method.follow_links
     pub fn file_type(
         &self
-    ) -> E::FileType {
+    ) -> FS::FileType {
         self.ty
     }
 
@@ -224,7 +224,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     ///
     /// If this entry has no file name (e.g., `/`), then the full path is
     /// returned.
-    pub fn file_name(&self) -> E::FileName {
+    pub fn file_name(&self) -> FS::FileName {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.file_name()
@@ -236,11 +236,11 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     }
 
     // fn from_path_internal(
-    //     path: &E::Path,
-    //     ctx: &mut E::Context,
+    //     path: &FS::Path,
+    //     ctx: &mut FS::Context,
     //     follow_link: bool,
-    // ) -> wd::ResultInner<Self, E> {
-    //     let md = E::metadata_from_path( path, follow_link, ctx ).map_err(|e| into_path_err(path, e))?;
+    // ) -> wd::ResultInner<Self, FS> {
+    //     let md = FS::metadata_from_path( path, follow_link, ctx ).map_err(|e| into_path_err(path, e))?;
     //     let pb = path.as_ref().to_path_buf();
 
     //     Self { 
@@ -253,19 +253,19 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     // }
 
     // pub fn from_path(
-    //     path: &E::Path,
-    //     ctx: &mut E::Context,
-    // ) -> wd::ResultInner<ReadDir<E>, E> {
+    //     path: &FS::Path,
+    //     ctx: &mut FS::Context,
+    // ) -> wd::ResultInner<ReadDir<FS>, FS> {
     //     let rawdent = Self::from_path_internal( path, ctx, false )?;
-    //     ReadDir::<E>::new_once(rawdent).into_ok()
+    //     ReadDir::<FS>::new_once(rawdent).into_ok()
     // }
 
     /// Get ReadDir object for this entry
     pub fn read_dir(
         &self, 
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<ReadDir<E>, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<ReadDir<FS>, FS> {
         let rd = match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.read_dir( ctx )
@@ -274,10 +274,10 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
                 fsdent.read_dir( ctx )
             },
         }.map_err(into_io_err)?;
-        ReadDir::<E>::new(rd, opened_count).into_ok()
+        ReadDir::<FS>::new(rd, opened_count).into_ok()
     }
 
-    fn as_fsdent_ty(&self) -> Option<(&E, &E::FileType)> {
+    fn as_fsdent_ty(&self) -> Option<(&FS, &FS::FileType)> {
         match &self.kind {
             RawDirEntryKind::Root { .. } => None,
             RawDirEntryKind::DirEntry { ref fsdent, .. } => (fsdent, &self.ty).into_some(),
@@ -288,8 +288,8 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     pub fn call_cmp(
         a: &Self, 
         b: &Self, 
-        cmp: &mut FnCmp<E>,
-        ctx: &mut E::Context,
+        cmp: &mut FnCmp<FS>,
+        ctx: &mut FS::Context,
     ) -> std::cmp::Ordering {
         let ap = a.as_fsdent_ty().unwrap();
         let bp = b.as_fsdent_ty().unwrap();
@@ -297,12 +297,12 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     }
 
     /// Create content item
-    pub fn make_content_item<CP: ContentProcessor<E>>(
+    pub fn make_content_item<CP: ContentProcessor<FS>>(
         &mut self,
         content_processor: &CP,
         is_dir: bool,
         depth: Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> Option<CP::Item> {
         match &mut self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
@@ -315,7 +315,7 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     }
 
     /// Check if walking into this entry is allowed
-    pub fn allow_push<CP: ContentProcessor<E>>(
+    pub fn allow_push<CP: ContentProcessor<FS>>(
         &self,
         content_processor: &CP,
     ) -> bool {
@@ -329,15 +329,15 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
         }
     }
 
-    // pub fn error_inner_from_entry(&self, err: E::Error) -> ErrorInner<E> {
-    //     ErrorInner::<E>::from_entry(self.get_fs_dir_entry().unwrap(), err)
+    // pub fn error_inner_from_entry(&self, err: FS::Error) -> ErrorInner<FS> {
+    //     ErrorInner::<FS>::from_entry(self.get_fs_dir_entry().unwrap(), err)
     // }
 
     /// Get fingerprint
     pub fn fingerprint(
         &self,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<E::DirFingerprint, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<FS::DirFingerprint, FS> {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.fingerprint( ctx )
@@ -351,8 +351,8 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
     /// Get device num
     pub fn device_num(
         &self,
-        ctx: &mut E::Context,
-    ) -> wd::ResultInner<E::DeviceNum, E> {
+        ctx: &mut FS::Context,
+    ) -> wd::ResultInner<FS::DeviceNum, FS> {
         match &self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.device_num(ctx)
@@ -368,8 +368,8 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
         &mut self,
         force_metadata: bool,
         force_file_name: bool,
-        ctx: &mut E::Context,
-    ) -> (E::PathBuf, Option<E::Metadata>, Option<E::FileName>) {
+        ctx: &mut FS::Context,
+    ) -> (FS::PathBuf, Option<FS::Metadata>, Option<FS::FileName>) {
         match &mut self.kind {
             RawDirEntryKind::Root { fsdent, .. } => {
                 fsdent.to_parts(self.follow_link, force_metadata, force_file_name, ctx)
@@ -394,11 +394,11 @@ impl<E: fs::FsDirEntry> RawDirEntry<E> {
 /// [`fs::ReadDir`]: https://doc.rust-lang.org/stable/std/fs/struct.ReadDir.html
 /// [`Vec<fs::DirEntry>`]: https://doc.rust-lang.org/stable/std/vec/struct.Vec.html
 #[derive(Debug)]
-pub enum ReadDir<E: fs::FsDirEntry> {
+pub enum ReadDir<FS: fs::FsDirEntry> {
     /// The single item (used for root)
     Once { 
         /// Item to be returned
-        item: RawDirEntry<E> 
+        item: RawDirEntry<FS> 
     },
 
     /// An opened handle.
@@ -413,7 +413,7 @@ pub enum ReadDir<E: fs::FsDirEntry> {
     /// [`Option<...>`]: https://doc.rust-lang.org/stable/std/option/enum.Option.html
     Opened { 
         /// Underlying ReadDir
-        rd: E::ReadDir 
+        rd: FS::ReadDir 
     },
 
     /// A closed handle.
@@ -424,7 +424,7 @@ pub enum ReadDir<E: fs::FsDirEntry> {
     /// Error on handle creating
     Error {
         /// Stored error
-        err: ErrorInner<E>,
+        err: ErrorInner<FS>,
     },
 }
 
@@ -434,12 +434,12 @@ macro_rules! extract_enum {
     }
 }
 
-impl<E: fs::FsDirEntry> ReadDir<E> {
+impl<FS: fs::FsDirEntry> ReadDir<FS> {
     
     /// Create new ReadDir returning one entry
     pub fn new_once(
-        item: RawDirEntry<E>,
-    ) -> wd::ResultInner<Self, E> {
+        item: RawDirEntry<FS>,
+    ) -> wd::ResultInner<Self, FS> {
         Self::Once { 
             item, 
         }.into_ok()
@@ -447,7 +447,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
 
     /// Create new ReadDir
     fn new(
-        rd: E::ReadDir,
+        rd: FS::ReadDir,
         opened_count: &mut Depth,
     ) -> Self {
         *opened_count += 1;
@@ -475,13 +475,13 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
     /// Collect all content and make this ReadDir closed
     pub fn collect_all<T>(
         &mut self,
-        process_rawdent: &mut impl (FnMut(wd::ResultInner<RawDirEntry<E>, E>, &mut E::Context) -> Option<T>),
+        process_rawdent: &mut impl (FnMut(wd::ResultInner<RawDirEntry<FS>, FS>, &mut FS::Context) -> Option<T>),
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
+        ctx: &mut FS::Context,
     ) -> Vec<T> {
         match self {
             ReadDir::Once {..} => {
-                let item = extract_enum!( self, ReadDir::Once{item}, ReadDir::<E>::Closed );
+                let item = extract_enum!( self, ReadDir::Once{item}, ReadDir::<FS>::Closed );
                 match process_rawdent(Ok(item), ctx) {
                     Some(t) => vec![t],
                     None => vec![],
@@ -491,7 +491,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
                 let entries = ReadDirOpenedIterator::new( rd, process_rawdent, ctx )
                     .filter_map(|opt| opt)
                     .collect();
-                *self = ReadDir::<E>::Closed;
+                *self = ReadDir::<FS>::Closed;
                 *opened_count -= 1;
                 entries
             },
@@ -499,7 +499,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
                 vec![]
             },
             ReadDir::Error {..} => { 
-                let err = extract_enum!( self, ReadDir::Error{err}, ReadDir::<E>::Closed );
+                let err = extract_enum!( self, ReadDir::Error{err}, ReadDir::<FS>::Closed );
                 match process_rawdent(Err(err), ctx) {
                     Some(e) => vec![e],
                     None => vec![],
@@ -513,23 +513,23 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
     pub fn next(
         &mut self,
         opened_count: &mut Depth,
-        ctx: &mut E::Context,
-    ) -> Option<wd::ResultInner<RawDirEntry<E>, E>> {
+        ctx: &mut FS::Context,
+    ) -> Option<wd::ResultInner<RawDirEntry<FS>, FS>> {
         match *self {
             ReadDir::Once {..} => {
-                let item = extract_enum!( self, ReadDir::Once{item}, ReadDir::<E>::Closed );
+                let item = extract_enum!( self, ReadDir::Once{item}, ReadDir::<FS>::Closed );
                 item.into_ok().into_some()
             },
             ReadDir::Opened { ref mut rd } => {
                 match rd.next_entry(ctx) {
                     Some(r) => {
                         match r {
-                            Ok(fsdent)  => RawDirEntry::<E>::from_fsdent( fsdent, ctx ),
+                            Ok(fsdent)  => RawDirEntry::<FS>::from_fsdent( fsdent, ctx ),
                             Err(e)      => Err(into_io_err(e)),
                         }.into_some()
                     },
                     None => {
-                        *self = ReadDir::<E>::Closed;
+                        *self = ReadDir::<FS>::Closed;
                         *opened_count -= 1;
                         None
                     },
@@ -539,7 +539,7 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
                 None
             },
             ReadDir::Error {..} => {
-                let err = extract_enum!( self, ReadDir::Error{err}, ReadDir::<E>::Closed );
+                let err = extract_enum!( self, ReadDir::Error{err}, ReadDir::<FS>::Closed );
                 err.into_err().into_some()
             },
         }
@@ -549,25 +549,25 @@ impl<E: fs::FsDirEntry> ReadDir<E> {
 /////////////////////////////////////////////////////////////////////////
 //// ReadDirOpenedIterator
 
-struct ReadDirOpenedIterator<'c, E, P, T> 
+struct ReadDirOpenedIterator<'c, FS, P, T> 
 where
-    E: fs::FsDirEntry,
-    P: (FnMut(wd::ResultInner<RawDirEntry<E>, E>, &mut E::Context) -> Option<T>),
+    FS: fs::FsDirEntry,
+    P: (FnMut(wd::ResultInner<RawDirEntry<FS>, FS>, &mut FS::Context) -> Option<T>),
 {
-    rd: &'c mut E::ReadDir,
+    rd: &'c mut FS::ReadDir,
     process_rawdent: &'c mut P,
-    ctx: &'c mut E::Context,
+    ctx: &'c mut FS::Context,
 }
 
-impl<'c, E, P, T> ReadDirOpenedIterator<'c, E, P, T> 
+impl<'c, FS, P, T> ReadDirOpenedIterator<'c, FS, P, T> 
 where
-    E: fs::FsDirEntry,
-    P: (FnMut(wd::ResultInner<RawDirEntry<E>, E>, &mut E::Context) -> Option<T>),
+    FS: fs::FsDirEntry,
+    P: (FnMut(wd::ResultInner<RawDirEntry<FS>, FS>, &mut FS::Context) -> Option<T>),
 {
     fn new(
-        rd: &'c mut E::ReadDir,
+        rd: &'c mut FS::ReadDir,
         process_rawdent: &'c mut P,
-        ctx: &'c mut E::Context,
+        ctx: &'c mut FS::Context,
     ) -> Self {
         Self {
             rd,
@@ -577,16 +577,16 @@ where
     }
 }
 
-impl<'c, E, P, T> Iterator for ReadDirOpenedIterator<'c, E, P, T> 
+impl<'c, FS, P, T> Iterator for ReadDirOpenedIterator<'c, FS, P, T> 
 where
-    E: fs::FsDirEntry,
-    P: (FnMut(wd::ResultInner<RawDirEntry<E>, E>, &mut E::Context) -> Option<T>),
+    FS: fs::FsDirEntry,
+    P: (FnMut(wd::ResultInner<RawDirEntry<FS>, FS>, &mut FS::Context) -> Option<T>),
 {
     type Item = Option<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let rrawdent = match self.rd.next_entry(self.ctx)? {
-            Ok(fsdent)  => RawDirEntry::<E>::from_fsdent( fsdent, self.ctx ),
+            Ok(fsdent)  => RawDirEntry::<FS>::from_fsdent( fsdent, self.ctx ),
             Err(e)      => Err(into_io_err(e)),
         };
         
